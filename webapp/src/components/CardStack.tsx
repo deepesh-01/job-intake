@@ -125,8 +125,13 @@ export function CardStack({
         {stack.length} new to triage
       </div>
 
-      {/* The card stack itself — relative-positioned, fixed height */}
-      <div className="relative w-full max-w-md aspect-[3/4] sm:aspect-[4/5]">
+      {/*
+        Card stack — fixed-aspect, relative-positioned.
+        `isolate` creates a new stacking context so the inner cards'
+        z-index values don't leak out and overlap the detail drawer
+        (which renders at z-50 at the document root).
+      */}
+      <div className="relative isolate w-full max-w-md aspect-[3/4] sm:aspect-[4/5]">
         {visible
           .slice()
           .reverse() // back-to-front: render bottom card first so top is on top in DOM

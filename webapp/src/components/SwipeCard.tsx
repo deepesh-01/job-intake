@@ -136,7 +136,10 @@ export function SwipeCard({
         x: isTop ? x : 0,
         y: isTop ? y : 0,
         rotate: isTop ? rotate : 0,
-        zIndex: 100 - stackIndex,
+        // Stacked within the parent's `isolation: isolate` boundary —
+        // these only affect ordering inside the card stack, not the rest
+        // of the page (so the drawer's z-50 still wins when it opens).
+        zIndex: 3 - stackIndex,
       }}
       className={cn(
         "absolute inset-0 select-none",

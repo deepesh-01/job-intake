@@ -3,6 +3,11 @@
 *Each section is a build step in the order it shipped. Don't edit prior
 sections; they're historical. Append new steps at the bottom.*
 
+> Sibling docs:
+> - [`vision.md`](./vision.md) — current state + 10x roadmap
+> - [`how-to-journey.md`](./how-to-journey.md) — operational guide
+> - [`job-intake-design-v1-original.md`](./job-intake-design-v1-original.md) — frozen v1 design
+
 ---
 
 # Step 1 — Repo skeleton + shared lib

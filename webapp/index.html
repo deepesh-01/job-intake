@@ -4,7 +4,24 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#09090b" />
+    <meta name="color-scheme" content="dark" />
     <title>Job Intake</title>
+    <meta name="description" content="Daily job-board scraper, resume-aware match scoring, and one-tap tailoring queue." />
+
+    <!-- PWA manifest — makes the page installable as a home-screen app -->
+    <!-- ?v= cache-busts the URL past Cloudflare's stale edge cache; bump on icon redesign -->
+    <link rel="manifest" href="/manifest.webmanifest?v=1" />
+
+    <!-- iOS Safari (doesn't read manifest for installability) -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Job Intake" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=1" />
+
+    <!-- Standard favicon fallbacks -->
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png?v=1" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png?v=1" />
   </head>
   <body class="bg-background text-foreground antialiased">
     <div id="root"></div>

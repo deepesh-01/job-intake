@@ -461,13 +461,44 @@ def _mount_webapp() -> None:
 
     @app.get("/{full_path:path}", include_in_schema=False)
     async def spa_fallback(full_path: str) -> FileResponse:
-        # Any non-/api path returns index.html. Client-side router handles it.
+        # /api/* paths shouldn't reach here (declared above), but guard anyway.
         if full_path.startswith("api/"):
             raise HTTPException(status_code=404)
+
+        # If a real file exists at this path under webapp/dist/ — manifest,
+        # sw.js, icons, favicon, etc. — serve THAT, not the SPA index.
+        # (Vite copies /public/* into the dist root at build time.)
+        if full_path:
+            candidate = _WEBAPP_DIST / full_path
+            try:
+                resolved = candidate.resolve()
+                if (
+                    candidate.is_file()
+                    and resolved.is_relative_to(_WEBAPP_DIST.resolve())
+                ):
+                    # Short cache so Cloudflare respects updates within minutes,
+                    # not hours. Cloudflare's default edge cache for static
+                    # responses is 4h; that bit us once when the SPA fallback
+                    # cached HTML at icon URLs.
+                    headers = {"Cache-Control": "public, max-age=300, must-revalidate"}
+                    if full_path == "sw.js":
+                        # Service workers must NOT be edge-cached or rollouts
+                        # of new SW behavior get pinned for hours.
+                        headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+                    return FileResponse(str(candidate), headers=headers)
+            except (OSError, ValueError):
+                pass  # fall through to SPA index
+
+        # SPA fallback — client-side router handles unknown paths.
         index = _WEBAPP_DIST / "index.html"
         if not index.is_file():
             raise HTTPException(status_code=500, detail="webapp/dist/index.html missing")
-        return FileResponse(str(index))
+        # Don't let Cloudflare pin index.html for hours — the JS bundle name
+        # inside changes on every build, and stale index.html → 404 on assets.
+        return FileResponse(
+            str(index),
+            headers={"Cache-Control": "no-cache, must-revalidate"},
+        )
 
 
 _LOCK_DIR = _env.data_dir / "locks"

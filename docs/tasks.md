@@ -899,6 +899,89 @@ fixes the root cause, then clicks Retry.
 
 ---
 
+# Step 27 — Progressive Web App (installable on phone home screen)
+
+User asked to make the page installable as a real app — currently
+"Add to Home Screen" on iOS just opened Chrome.
+
+## 27.1 — PWA primitives (~30 min)
+
+**Icons** (`webapp/public/`) — generated via Pillow from a Python script
+in-repo. Briefcase glyph on rounded primary-blue background, matching
+the Header's gradient logo.
+- `icon-192.png` (Android home screen)
+- `icon-512.png` (Android splash + general)
+- `icon-maskable-512.png` (12% safe-zone padding for Android adaptive icons)
+- `apple-touch-icon.png` (180×180, iOS home screen)
+
+**Manifest** (`webapp/public/manifest.webmanifest`):
+```
+name, short_name, start_url=/, scope=/, display=standalone,
+orientation=portrait, theme_color=#09090b, background_color=#09090b,
+icons[3], categories=[productivity, business]
+```
+
+**Service worker** (`webapp/public/sw.js`) — minimal, ~50 lines.
+- Required by Chrome/Edge for the install prompt to appear; iOS just
+  needs the manifest.
+- Caches static assets with cache-first + stale-while-revalidate
+  (icons, JS bundle, fonts → instant repeat opens).
+- **Never caches `/api/*`** — Sheet is the truth, stale data is worse
+  than no data. `event.respondWith` only fires for GET non-/api paths.
+
+**HTML wiring** (`webapp/index.html`):
+- `<link rel="manifest">` + `<link rel="apple-touch-icon">`
+- iOS-specific meta tags: `apple-mobile-web-app-capable`,
+  `apple-mobile-web-app-status-bar-style=black-translucent`,
+  `apple-mobile-web-app-title=Job Intake`
+- `theme-color=#09090b`, `color-scheme=dark`
+
+**SW registration** in `main.tsx` — only on HTTPS, only after `load`,
+swallows errors silently if registration fails.
+
+## 27.2 — FastAPI fix: serve real files from `/dist/` root
+
+Original mount only handled `/assets/*`. Anything else (`/manifest.webmanifest`,
+`/sw.js`, `/icon-*.png`, `/favicon.ico`) fell through to the SPA index
+fallback — returning index.html with the wrong content-type.
+
+`spa_fallback` now checks `_WEBAPP_DIST/<path>` first; if a real file
+exists there (with path-traversal guard via `is_relative_to`), serves
+it as a `FileResponse` with appropriate Cache-Control.
+- Static files: `max-age=300, must-revalidate` (5 min — short enough
+  that updates propagate fast, long enough to save edge round-trips)
+- `sw.js`: `no-cache, no-store, must-revalidate` (SW updates need to
+  be picked up immediately, not pinned for hours)
+- `index.html`: `no-cache, must-revalidate` (always re-validate so
+  the JS bundle name inside isn't stale)
+
+## 27.3 — Cloudflare cache bust on rollout
+
+First deployment hit a Cloudflare caching trap: between commits, when
+`/manifest.webmanifest` and friends 404'd through the SPA fallback,
+Cloudflare cached the HTML response with `text/html` content-type for
+4 hours. After the FastAPI fix, the URLs were stale at the edge.
+
+**Fix.** Added `?v=1` cache-buster to all PWA URL references
+(`index.html`, `manifest.webmanifest` icon paths, SW registration path).
+Cloudflare treats query-string variants as new resources → fresh fetch
+straight from origin. Bump on icon redesigns or SW behavior changes.
+
+## 27.4 — Smoke checklist
+- [x] Local: `curl http://localhost:8090/manifest.webmanifest` returns
+  JSON with correct `application/manifest+json` content-type
+- [x] Live: cache-busted URLs return correct content-types (`image/png`
+  for icons, `text/javascript` for sw.js)
+- [x] DevTools → Application → Manifest tab shows all 3 icons + valid
+  manifest fields
+- [x] DevTools → Application → Service Workers shows registered + activated
+- [x] iOS Safari: Share → Add to Home Screen → opens in standalone
+  mode (no browser chrome) with Job Intake icon
+- [x] Android Chrome: install prompt available; installed app opens
+  standalone
+
+---
+
 ## Out of scope (current)
 
 These are deliberate non-goals or deferred to v3 — see `vision.md` for

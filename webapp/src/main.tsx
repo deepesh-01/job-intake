@@ -33,3 +33,14 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     </QueryClientProvider>
   </React.StrictMode>,
 )
+
+// Register the service worker for PWA installability + offline static caching.
+// Wait for window.load so it doesn't compete with first-render network.
+if ("serviceWorker" in navigator && window.location.protocol === "https:") {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker
+      // ?v= busts past Cloudflare's stale edge cache on first rollout
+      .register("/sw.js?v=1", { scope: "/" })
+      .catch((err) => console.warn("SW registration failed:", err))
+  })
+}

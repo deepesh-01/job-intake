@@ -474,3 +474,53 @@ the subprocess always finds node. Belt + suspenders.
 **Consequence.** This pattern — explicitly compose PATH for child
 processes — should be applied to any other launchd-spawned background
 service that needs to reach for tools outside the system PATH.
+
+---
+
+## ADR-023 · Mirror resume-builder's docs-sync protocol byte-for-byte
+**Date:** 2026-04-27 · **Status:** Accepted
+
+**Context.** Resume-builder ships a `scripts/docs-sync.sh` that uses the
+`claude` CLI to (a) audit docs vs code surface (`check` mode, read-only)
+and (b) write the updates back (`apply` mode, edit). Two npm aliases
+expose it: `docs:check` and `docs:sync`. The protocol catches drift
+that linters can't (e.g. "every command in `bot.command(...)` should be
+in `/help` table"). User asked us to mirror it here.
+
+**Decision.** Add `scripts/docs-sync.sh` with identical structure to the
+resume-builder original — same `--check`/`--apply` modes, same
+`claude -p` invocation, same output format (`DRIFT_DETECTED: yes|no`
+followed by a per-item list). Exposed via a `Makefile` (we're Python +
+uv, no npm) with `make docs-check` / `make docs-sync` targets that map
+1:1 to resume-builder's npm scripts.
+
+**Reasoning.**
+- **Cross-repo familiarity.** Working on either repo, the workflow is
+  identical: `make docs-check` (or `npm run docs:check` in the other).
+  No mental switch cost.
+- **Append-only invariants enforced in the prompt.** `tasks.md` and
+  `decisions.md` say "do NOT edit prior steps/ADRs" right in the prompt
+  Claude reads. `job-intake-design-v1-original.md` is explicitly off-limits.
+- **The audit list is project-specific.** 12 numbered checks tailored
+  to job-intake's surface (sources registered in 3 places, env keys in
+  config.py + .env doc, status enum in schema + FilterBar pills, every
+  webapp component referenced, watchdog constants matching ADR-020/021,
+  PWA assets in tasks.md Step 27, etc.). Different from resume-builder's
+  6 checks.
+- **Cost is bounded** (~$0.05-0.20 check, ~$0.30-0.50 apply). Worth it
+  on every feature ship.
+
+**Trade-offs accepted.**
+- Hard dependency on `claude` CLI being authenticated. If the user's
+  Claude Code session expires, the script errors with a useful message.
+- LLM judgement varies run-to-run. Two checks back-to-back can produce
+  slightly different drift lists. Acceptable: the high-signal items are
+  consistent; the noise is in marginal cases.
+- The audit list lives in the script — when we add a new doc-relevant
+  surface (e.g. a new ADR family), we update the prompt's check list.
+  Documented as "if you add X, update the audit checks in scripts/docs-sync.sh".
+
+**Consequence.** Doc drift is now a `make docs-check` away from being
+caught. Mirrors resume-builder's exact UX so a contributor (or future-
+self after a long pause) doesn't have to remember which repo uses which
+command — both projects use the same `check`/`sync` verbs.

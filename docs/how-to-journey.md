@@ -513,3 +513,20 @@ When you add a feature, update:
    they're historical). Same shape as resume-builder's `tasks.md`.
 3. **`vision.md`** — only if the change shifts the system's *direction*
    (new tier-N capability). Most changes don't.
+
+### Automated drift detection
+
+Same protocol as resume-builder. Run from the repo root:
+
+```bash
+make docs-check    # claude audits docs vs code, lists drift, exits non-zero if any
+make docs-sync     # claude writes the updates back (vision/how-to edited freely;
+                   # tasks/decisions append-only; v1-original frozen)
+```
+
+Cost: ~$0.05-0.20 per check, ~$0.30-0.50 per apply. The check is read-only
+and safe to run before every commit; the apply mutates `docs/` so review
+the diff before you commit.
+
+Either invokes `bash scripts/docs-sync.sh {check|apply}` directly if you
+prefer not to use make.

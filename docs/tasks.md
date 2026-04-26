@@ -982,6 +982,68 @@ straight from origin. Bump on icon redesigns or SW behavior changes.
 
 ---
 
+# Step 28 — Mirror resume-builder's docs-sync system
+
+User asked to mirror the docs-sync protocol from `~/Documents/resume-builder/`
+so this repo gets the same `make docs-check` / `make docs-sync`
+workflow. ADR-023 covers the design choice.
+
+## 28.1 — `scripts/docs-sync.sh` (~150 lines bash)
+- `--check` mode: runs `claude -p "$PROMPT" --allowedTools Read`,
+  prints drift, exits 1 if any (so it's CI-friendly).
+- `--apply` mode: runs `claude -p "$PROMPT" --allowedTools Read,Edit,Write`,
+  Claude rewrites the docs in place, writes one-line summary to
+  `docs/.docs-sync-last.txt`.
+- Pre-checks: `claude` CLI must be on PATH; `docs/` must exist.
+
+## 28.2 — Project-specific audit prompt (12 checks)
+The prompt enumerates every job-intake source-of-truth file (boards.yaml,
+tag_rules.yaml, src/lib/config.py, src/sheet/schema.py, src/scout/runner.py,
+src/scout/sources/*.py, src/web/api.py, webapp/src/components/*.tsx, plists,
+…) and lists 12 numbered drift checks specific to this codebase:
+1. boards.yaml source_types ↔ runner._SOURCE_MODULES + verify_boards.py
+2. config.py env keys ↔ how-to-journey.md `.env` section
+3. JOBS_COLUMNS ↔ "Jobs tab" section + SCHEMA_VERSION
+4. VALID_STATUSES ↔ "Status state machine" + FilterBar pills
+5. API endpoints ↔ "API endpoints" table with correct auth annotations
+6. Scripts ↔ "Scripts" table
+7. Major webapp components mentioned in how-to-journey.md
+8. Watchdog constants ↔ ADR-020/021 narrative
+9. PWA assets ↔ tasks.md Step 27 + how-to "Install as a phone app"
+10. Recent commits → corresponding tasks.md step
+11. Non-obvious choices → ADR
+12. New failure modes → how-to-journey troubleshooting table
+
+## 28.3 — Append-only invariants enforced in the prompt
+- vision.md, how-to-journey.md → editable anywhere
+- tasks.md → APPEND-ONLY new step at end (next sequential)
+- decisions.md → APPEND-ONLY new ADR (next sequential ADR-NNN)
+- job-intake-design-v1-original.md → frozen, never modify
+
+## 28.4 — Makefile aliases
+We're a Python + uv project (no npm), so a `Makefile` exposes the npm-style
+shortcuts that resume-builder uses:
+```
+make docs-check     →  bash scripts/docs-sync.sh check
+make docs-sync      →  bash scripts/docs-sync.sh apply
+```
+
+## 28.5 — `.gitignore` covers the transient marker
+`docs/.docs-sync-last.txt` is written on every apply run; it's a session
+breadcrumb, not source state. Ignored.
+
+## 28.6 — Smoke checklist
+- [ ] `make docs-check` runs without error, prints `DRIFT_DETECTED: no`
+  on a clean tree
+- [ ] When prior step was just shipped (and tasks.md not yet updated),
+  `make docs-check` exits 1 and lists the missing step
+- [ ] `make docs-sync` writes a new build step to tasks.md and a one-
+  liner to `docs/.docs-sync-last.txt`
+- [ ] Cross-repo: `cd ~/Documents/resume-builder && npm run docs:check`
+  still works; both repos converge on the same `check`/`apply` UX
+
+---
+
 ## Out of scope (current)
 
 These are deliberate non-goals or deferred to v3 — see `vision.md` for

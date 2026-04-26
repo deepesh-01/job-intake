@@ -6,6 +6,7 @@ sections; they're historical. Append new steps at the bottom.*
 > Sibling docs:
 > - [`vision.md`](./vision.md) — current state + 10x roadmap
 > - [`how-to-journey.md`](./how-to-journey.md) — operational guide
+> - [`decisions.md`](./decisions.md) — ADR log of non-obvious choices
 > - [`job-intake-design-v1-original.md`](./job-intake-design-v1-original.md) — frozen v1 design
 
 ---

@@ -2,9 +2,11 @@
 
 *Owner: Deepesh · Status: shipped + extending · Last updated: 2026-04-27*
 
-> The original v1 design (Sheet-only pipeline, on-laptop, ~20 boards) lives at
-> [`job-intake-design-v1-original.md`](./job-intake-design-v1-original.md) for history. This
-> doc reflects what the system has become — and where it goes next.
+> Sibling docs:
+> - [`how-to-journey.md`](./how-to-journey.md) — operational guide
+> - [`tasks.md`](./tasks.md) — chronological build log
+> - [`decisions.md`](./decisions.md) — ADR log of non-obvious choices
+> - [`job-intake-design-v1-original.md`](./job-intake-design-v1-original.md) — frozen v1 design
 
 ---
 

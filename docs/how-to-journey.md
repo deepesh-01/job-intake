@@ -6,10 +6,11 @@ A daily job-intake pipeline. Scout pulls fresh postings from 30+ boards into a
 Google Sheet, scores them against your resume, and drops them in a webapp where
 you triage, tailor, and apply — without ever leaving the URL on your phone.
 
-For the *vision* (current state + 10x roadmap) see [`vision.md`](./vision.md).
-For the *original v1 design* (frozen for history) see
-[`job-intake-design-v1-original.md`](./job-intake-design-v1-original.md).
-For the *chronological build log* see [`tasks.md`](./tasks.md).
+Sibling docs:
+- [`vision.md`](./vision.md) — current state + 10x roadmap
+- [`tasks.md`](./tasks.md) — chronological build log
+- [`decisions.md`](./decisions.md) — ADR log of non-obvious choices
+- [`job-intake-design-v1-original.md`](./job-intake-design-v1-original.md) — frozen v1 design
 
 ---
 

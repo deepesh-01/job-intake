@@ -42,7 +42,12 @@ export function FilterBar({
 }) {
   const [showAdvanced, setShowAdvanced] = useState(false)
 
+  // Card view is locked to status=new (one-decision-at-a-time triage),
+  // so the status pills are disabled while in cards mode.
+  const statusLocked = view === "cards"
+
   const toggleStatus = (s: string) => {
+    if (statusLocked) return
     const has = value.status.includes(s)
     onChange({
       ...value,
@@ -54,19 +59,31 @@ export function FilterBar({
     <div className="backdrop-blur-xl bg-background/70 border-b border-border/60">
       <div className="container mx-auto py-3 space-y-2.5">
         {/* status pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto -mx-1 px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div
+          className={cn(
+            "flex items-center gap-1.5 overflow-x-auto -mx-1 px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+            statusLocked && "opacity-60",
+          )}
+          title={statusLocked ? "Status is locked to New in card view" : undefined}
+        >
           {STATUS_OPTIONS.map((opt) => {
-            const active = value.status.includes(opt.value)
+            // In card mode: only "New" appears active; all are non-clickable.
+            const active = statusLocked
+              ? opt.value === "new"
+              : value.status.includes(opt.value)
             return (
               <button
                 key={opt.value}
                 onClick={() => toggleStatus(opt.value)}
+                disabled={statusLocked}
                 className={cn(
                   "shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
-                  "active:scale-95",
+                  !statusLocked && "active:scale-95",
                   active
                     ? "bg-foreground text-background border-foreground shadow-sm"
                     : "bg-transparent text-muted-foreground border-border hover:text-foreground hover:border-foreground/50",
+                  statusLocked && "cursor-not-allowed",
+                  statusLocked && !active && "hover:text-muted-foreground hover:border-border",
                 )}
               >
                 {opt.label}

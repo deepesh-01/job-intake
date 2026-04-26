@@ -20,6 +20,16 @@ export function App() {
   const [view, setView] = useState<ViewMode>("list")
   const [openId, setOpenId] = useState<string | null>(null)
 
+  // Switching to cards = "I want to triage new ones." Force the status
+  // filter so the user sees the same thing the server is giving them.
+  // Switching back to list keeps whatever the user changes it to.
+  const handleViewChange = (next: ViewMode) => {
+    if (next === "cards") {
+      setFilters((f) => ({ ...f, status: ["new"] }))
+    }
+    setView(next)
+  }
+
   return (
     <div className="min-h-screen flex flex-col">
       {/* Single sticky stack — PreviewBanner (if viewer) + Header +
@@ -27,7 +37,7 @@ export function App() {
       <div className="sticky top-0 z-40">
         <PreviewBanner />
         <Header />
-        <FilterBar value={filters} onChange={setFilters} view={view} onViewChange={setView} />
+        <FilterBar value={filters} onChange={setFilters} view={view} onViewChange={handleViewChange} />
       </div>
       <main className="flex-1 container mx-auto pb-32 pt-2">
         {view === "list" ? (

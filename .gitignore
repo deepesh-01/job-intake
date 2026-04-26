@@ -22,3 +22,6 @@ data/launchd.*.log
 *.bak
 CLAUDE_resume_tailoring_runtime.md
 webapp/tsconfig.tsbuildinfo
+
+# Transient marker written by `make docs-sync` after each apply
+docs/.docs-sync-last.txt

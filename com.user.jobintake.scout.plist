@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>com.user.jobintake.scout</string>
+    <key>ProgramArguments</key>
+    <array>
+      <string>/usr/bin/caffeinate</string>
+      <string>-dims</string>
+      <string>/Users/deepeshz2/Documents/ready-to-apply/.venv/bin/python</string>
+      <string>-m</string>
+      <string>scout.runner</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/deepeshz2/Documents/ready-to-apply</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+      <key>PYTHONPATH</key>
+      <string>/Users/deepeshz2/Documents/ready-to-apply/src</string>
+    </dict>
+    <key>StartCalendarInterval</key>
+    <dict>
+      <key>Hour</key><integer>9</integer>
+      <key>Minute</key><integer>0</integer>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>/Users/deepeshz2/Documents/ready-to-apply/data/launchd.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/deepeshz2/Documents/ready-to-apply/data/launchd.err.log</string>
+  </dict>
+</plist>

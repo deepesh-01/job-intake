@@ -1,0 +1,41 @@
+[project]
+name = "job-intake"
+version = "0.1.0"
+description = "Daily job-board scraper that feeds a Google Sheet and triggers System A tailoring"
+requires-python = ">=3.11"
+dependencies = [
+    "gspread>=6.1.2",
+    "google-auth>=2.30.0",
+    "google-api-python-client>=2.140.0",
+    "google-auth-oauthlib>=1.2.0",
+    "httpx>=0.27.0",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "selectolax>=0.3.21",
+    "markdownify>=0.12.1",
+    "structlog>=24.1.0",
+    "pyyaml>=6.0.1",
+    "rapidfuzz>=3.9.0",
+    "python-dotenv>=1.0.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.2.0",
+    "pytest-mock>=3.14.0",
+]
+
+[project.scripts]
+scout = "scout.runner:main"
+processor = "processor.runner:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/scout", "src/processor", "src/sheet", "src/lib", "src/tailor_bridge.py"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

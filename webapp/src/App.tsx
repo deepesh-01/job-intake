@@ -1,0 +1,37 @@
+import { useState } from "react"
+import { JobsList } from "./components/JobsList"
+import { FilterBar, type Filters } from "./components/FilterBar"
+import { JobDetail } from "./components/JobDetail"
+import { ProcessorButton } from "./components/ProcessorButton"
+import { Header } from "./components/Header"
+import { PreviewBanner } from "./components/PreviewBanner"
+
+export function App() {
+  const [filters, setFilters] = useState<Filters>({
+    status: ["new"],
+    resumeStrong: false,  // opt-in via the slider — default OFF so the
+                           // status filter alone drives what's visible.
+    targetCity: false,
+    excludeNonUsOnly: false,
+    q: "",
+    sort: "resume_match_desc",
+  })
+  const [openId, setOpenId] = useState<string | null>(null)
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      {/* Single sticky stack — PreviewBanner (if viewer) + Header +
+          FilterBar all pin together at the top of the viewport. */}
+      <div className="sticky top-0 z-40">
+        <PreviewBanner />
+        <Header />
+        <FilterBar value={filters} onChange={setFilters} />
+      </div>
+      <main className="flex-1 container mx-auto pb-32 pt-2">
+        <JobsList filters={filters} onOpen={setOpenId} />
+      </main>
+      <ProcessorButton />
+      <JobDetail id={openId} onClose={() => setOpenId(null)} />
+    </div>
+  )
+}

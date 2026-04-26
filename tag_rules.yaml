@@ -1,0 +1,247 @@
+# ─────────────────────────────────────────────────────────────────
+# COMPENSATION — currency-aware, calibrated to my real switch trigger.
+# Current TC: ₹26L base + ₹4L variable + ₹50L ESOPs (4yr vest).
+# Cash TC ≈ ₹30L. A meaningful upgrade is ~₹40L+ cash, OR a
+# remote USD role at $60k+, OR an early-stage company where the
+# equity is the real story (use `early_stage` to override comp_below).
+# ─────────────────────────────────────────────────────────────────
+
+comp:
+  inr_floor: 4000000        # ₹40L total cash TC (base + variable)
+  usd_floor: 60000          # $60k for remote/global roles
+  # FX for non-INR/USD currencies, conservative (one-way only).
+  # Convert to USD then check against usd_floor.
+  fx_rates:
+    GBP: 1.20
+    EUR: 1.05
+    SGD: 0.74
+    AUD: 0.65
+    CAD: 0.72
+
+my_region: IN
+my_city_aliases: [bengaluru, bangalore, blr, hyderabad, hyd, india, gurgaon, gurugram, noida, ncr, pune, mumbai]
+
+# ─────────────────────────────────────────────────────────────────
+# STACK — only what I actually want to be hired for.
+# ─────────────────────────────────────────────────────────────────
+
+stacks:
+  typescript:
+    keywords:
+      - typescript
+      - "type script"
+      - ts
+      - node.js
+      - nodejs
+      - "node js"
+      - react
+      - next.js
+      - nestjs
+      - deno
+      - bun
+      - hono
+    section_hint: [required, must have, requirements, "you have", "you bring", "what we look for"]
+
+  python:
+    keywords:
+      - python
+      - django
+      - fastapi
+      - flask
+      - pydantic
+      - asyncio
+    section_hint: [required, must have, requirements, "you have", "you bring", "what we look for"]
+
+# ─────────────────────────────────────────────────────────────────
+# ROLE SHAPE — application engineering only. Not infra, not ML, not
+# data eng, not security, not QA. These tags filter aggressively.
+# ─────────────────────────────────────────────────────────────────
+
+application_eng:
+  match:
+    - "full stack"
+    - "full-stack"
+    - "fullstack"
+    - "backend engineer"
+    - "back-end engineer"
+    - "product engineer"
+    - "software engineer"
+    - "applications engineer"
+    - "founding engineer"
+    - "early engineer"
+  exclude:
+    - "infrastructure"
+    - "platform engineer"
+    - "site reliability"
+    - "sre"
+    - "devops"
+    - "machine learning"
+    - "ml engineer"
+    - "ml ops"
+    - "data engineer"
+    - "data scientist"
+    - "security engineer"
+    - "qa engineer"
+    - "test engineer"
+    - "ios engineer"
+    - "android engineer"
+    - "embedded"
+    - "firmware"
+    - "hardware"
+
+seniority:
+  match:
+    - senior
+    - staff
+    - principal
+    - founding
+    - "founding engineer"
+    - "early engineer"
+    - lead
+    - "sr\\."
+    - "tech lead"
+    - "engineering lead"
+    - "head of engineering"
+    - architect
+    - mts            # Member of Technical Staff (FAANG-style)
+    - smts
+  exclude:
+    - junior
+    - "jr\\."
+    - entry
+    - "entry-level"
+    - intern
+    - graduate
+    - "new grad"
+    - associate
+    - trainee
+    - apprentice
+
+# ─────────────────────────────────────────────────────────────────
+# STAGE — derived from JD body language.
+# `early_stage` is special: it allows `comp_below` rows to still
+# be reviewable (the equity is the upside, not the cash).
+# ─────────────────────────────────────────────────────────────────
+
+stage:
+  early:
+    match:
+      - "seed stage"
+      - "series a"
+      - "series-a"
+      - "founding team"
+      - "early stage"
+      - "yc s2[0-9]"
+      - "yc w2[0-9]"
+      - "y combinator"
+      - "first 10 engineers"
+      - "first engineering hire"
+      - "no.* engineer"
+  growth:
+    match:
+      - "series b"
+      - "series-b"
+      - "series c"
+      - "series-c"
+      - "growth stage"
+  late:
+    match:
+      - "series d"
+      - "series e"
+      - "pre-ipo"
+      - "publicly traded"
+      - "nasdaq"
+      - "nyse"
+
+# ─────────────────────────────────────────────────────────────────
+# CULTURE — the most important signal for me. I want either
+# (a) genuinely chill 9-5 (so I have time for personal projects), or
+# (b) fast-moving but enjoyable + AI-friendly. NOT scrappy startups
+# that demand long hours without the upside.
+# ─────────────────────────────────────────────────────────────────
+
+culture:
+  ai_native_signals:
+    # JD or company description mentions these positively
+    - "cursor"
+    - "github copilot"
+    - "claude code"
+    - "ai-native"
+    - "ai-first"
+    - "we encourage ai tools"
+    - "ai-augmented engineering"
+    - "agentic"
+    - "ai agent"
+    - "llm"
+    - "anthropic"
+    - "openai"
+
+  chill_signals:
+    - "work-life balance"
+    - "no on-call"
+    - "no on call"
+    - "9 to 5"
+    - "9-to-5"
+    - "async"
+    - "asynchronous"
+    - "no crunch"
+    - "no overtime"
+    - "sustainable pace"
+    - "40 hour"
+    - "40-hour"
+    - "fully async"
+    - "result-oriented"
+
+  grind_signals:
+    # Red flags. If found, tag grind_signal regardless of other tags.
+    - "rockstar"
+    - "ninja"
+    - "10x engineer"
+    - "wear many hats"
+    - "we work hard"
+    - "all in"
+    - "hustle"
+    - "fast-paced environment"   # cliché-tier, often means crunch
+    - "demanding environment"
+    - "high-intensity"
+    - "we don't watch the clock"
+    - "996"
+
+# ─────────────────────────────────────────────────────────────────
+# REMOTE — what counts as remote-OK from Bengaluru.
+# ─────────────────────────────────────────────────────────────────
+
+remote:
+  allow_locations:
+    - remote
+    - "fully remote"
+    - "remote - global"
+    - "remote (global)"
+    - anywhere
+    - worldwide
+    - global
+    - "remote - india"
+    - "remote (india)"
+    - "remote - apac"
+    - apac
+    - "asia pacific"
+    - india
+    - bengaluru
+    - bangalore
+    - blr
+    - hyderabad
+    - hyd
+    - "bengaluru, india"
+    - "bangalore, india"
+    - "hyderabad, india"
+  block_locations:
+    - "us only"
+    - "usa only"
+    - "united states only"
+    - "us-based only"
+    - "must reside in the us"
+    - "canada only"
+    - "uk only"
+    - "emea only"
+    - "europe only"
+    - "eu only"

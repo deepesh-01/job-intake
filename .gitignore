@@ -1,0 +1,23 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+data/
+*.json
+.pytest_cache/
+.DS_Store
+
+# Webapp build artifacts
+webapp/node_modules/
+webapp/dist/
+webapp/.vite/
+
+# Local launchd logs
+data/web.*.log
+data/launchd.*.log
+*.bak
+CLAUDE_resume_tailoring_runtime.md

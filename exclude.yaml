@@ -1,0 +1,60 @@
+# Companies whose listings I never want to see, regardless of ATS.
+# Exact-match (case-insensitive) on company name OR substring match
+# on any company_aliases entry.
+
+excluded_companies:
+  # Big Tech (skip per #3 in PRD)
+  - { name: "google",    aliases: ["google", "alphabet"] }
+  - { name: "meta",      aliases: ["meta", "facebook"] }
+  - { name: "amazon",    aliases: ["amazon", "aws"] }
+  - { name: "microsoft", aliases: ["microsoft"] }
+  - { name: "apple",     aliases: ["apple inc"] }
+  - { name: "netflix",   aliases: ["netflix"] }
+
+  # Indian services / IT consultancies (skip per #3 in PRD)
+  - { name: "tcs",       aliases: ["tata consultancy", "tcs "] }
+  - { name: "infosys",   aliases: ["infosys"] }
+  - { name: "wipro",     aliases: ["wipro"] }
+  - { name: "hcl",       aliases: ["hcl tech", "hcl technologies"] }
+  - { name: "cognizant", aliases: ["cognizant"] }
+  - { name: "capgemini", aliases: ["capgemini"] }
+  - { name: "accenture", aliases: ["accenture"] }
+  - { name: "deloitte",  aliases: ["deloitte"] }
+  - { name: "ltimindtree", aliases: ["ltimindtree", "lti mindtree"] }
+  - { name: "tech mahindra", aliases: ["tech mahindra"] }
+
+# JD body or company description keyword exclusions.
+# If ANY of these match, the row is dropped.
+
+excluded_keywords:
+  # Crypto / web3 (skip per #3 in PRD)
+  - "web3"
+  - "blockchain"
+  - "crypto"
+  - "defi"
+  - "nft"
+  - "smart contract"
+  - "solidity"
+  - "ethereum"
+  - "bitcoin"
+  - "tokenomics"
+  - "dao"
+
+  # Defense / military (skip per #3 in PRD)
+  - "defense contractor"
+  - "department of defense"
+  - " dod "
+  - "military application"
+  - "weapons system"
+  - "palantir"
+  - "anduril"
+  - "lockheed"
+  - "raytheon"
+  - "northrop"
+
+# Company-name patterns suggesting Indian-services-style consultancies
+# even if not in the explicit excluded_companies list.
+
+excluded_company_patterns:
+  - ".*(consulting|consultancy|services|solutions) (pvt|private) ltd.*"
+  - ".*(it services|it consulting|software services).*"

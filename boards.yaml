@@ -1,0 +1,100 @@
+# Run scripts/verify_boards.py after editing — it pings each
+# board's API and reports any that 404.
+#
+# Last verified: 2026-04-26
+# Disabled entries are kept in-place for re-discovery — the slug
+# may have changed or the company may have moved ATS providers.
+
+boards:
+  # ── AI-native (high enjoy_eligible likelihood) ──
+  - { slug: anthropic,    source_type: greenhouse, board_id: anthropic,    enabled: true }
+  - { slug: vercel,       source_type: ashby,      board_id: vercel,       enabled: true }   # 0 postings on last verify
+  - { slug: posthog,      source_type: ashby,      board_id: posthog,      enabled: true }
+  - { slug: replicate,    source_type: ashby,      board_id: replicate,    enabled: false }  # 404 — slug changed?
+  - { slug: mintlify,     source_type: ashby,      board_id: mintlify,     enabled: true }
+  - { slug: resend,       source_type: ashby,      board_id: resend,       enabled: true }
+
+  # ── Growth-stage application eng with good rep ──
+  - { slug: linear,       source_type: ashby,      board_id: linear,       enabled: true }
+  - { slug: stripe,       source_type: greenhouse, board_id: stripe,       enabled: true }
+  - { slug: notion,       source_type: ashby,      board_id: notion,       enabled: true }   # ✓ moved to Ashby (141 postings)
+  - { slug: figma,        source_type: greenhouse, board_id: figma,        enabled: true }
+  - { slug: supabase,     source_type: ashby,      board_id: supabase,     enabled: true }
+  - { slug: cal,          source_type: ashby,      board_id: cal,          enabled: false }  # 404 — try `cal-com`?
+  - { slug: framer,       source_type: lever,      board_id: framer,       enabled: false }  # 404 — moved off Lever
+  - { slug: webflow,      source_type: greenhouse, board_id: webflow,      enabled: true }
+  - { slug: zapier,       source_type: greenhouse, board_id: zapier,       enabled: false }  # 404 — Zapier on Workday now
+  - { slug: github,       source_type: greenhouse, board_id: github,       enabled: false }  # 404 — Microsoft Careers (Workday) post-acquisition
+  - { slug: discord,      source_type: greenhouse, board_id: discord,      enabled: true }
+
+  # ── Indian unicorns/well-funded (verify ATS — many use custom careers pages) ──
+  - { slug: razorpay,     source_type: greenhouse, board_id: razorpaysoftwareprivatelimited, enabled: true }   # ✓ Bangalore (48 postings)
+  - { slug: postman,      source_type: greenhouse, board_id: postman,      enabled: true }
+  - { slug: browserstack, source_type: greenhouse, board_id: browserstack, enabled: false }  # 404 — slug changed?
+
+  # ── More India-targeted companies (Bangalore/Hyderabad-heavy) ──
+  # Most of these were guesses. Working set after verify: cred, meesho.
+  - { slug: hasura,       source_type: greenhouse, board_id: hasura,       enabled: false }  # 404 — likely Workday now
+  - { slug: atlan,        source_type: ashby,      board_id: atlan,        enabled: true }   # ✓ Bangalore (11 postings)
+  - { slug: cred,         source_type: lever,      board_id: cred,         enabled: true }   # ✓ Bangalore
+  - { slug: meesho,       source_type: lever,      board_id: meesho,       enabled: true }   # ✓ Bangalore
+  - { slug: groww,        source_type: greenhouse, board_id: groww,        enabled: true }   # ✓ Bangalore (15 postings)
+  - { slug: sharechat,    source_type: greenhouse, board_id: sharechat,    enabled: false }  # 404
+  - { slug: apna,         source_type: lever,      board_id: apnatime,     enabled: false }  # 404
+  - { slug: hyperverge,   source_type: lever,      board_id: hyperverge,   enabled: false }  # 404
+  - { slug: zerodha,      source_type: lever,      board_id: zerodha,      enabled: false }  # 404 (custom careers)
+  - { slug: chargebee,    source_type: lever,      board_id: chargebee,    enabled: false }  # 404
+  - { slug: freshworks,   source_type: lever,      board_id: freshworks,   enabled: true }   # ✓ Chennai/Bangalore (0 postings on probe — keep enabled)
+  - { slug: zoho,         source_type: greenhouse, board_id: zoho,         enabled: false }  # 404 (custom careers)
+  - { slug: gojek,        source_type: greenhouse, board_id: gojek,        enabled: false }  # 404
+  - { slug: setu,         source_type: lever,      board_id: setu,         enabled: false }  # 404
+  - { slug: rippling_in,  source_type: ashby,      board_id: rippling,     enabled: false }  # 404
+  - { slug: paytm,        source_type: lever,      board_id: paytm,        enabled: true }   # ✓ Bangalore/NCR (130 postings)
+
+  # ── Workday-based companies with strong India offices (added 2026-04-26) ──
+  # Probed PhonePe/Flipkart/Swiggy/Zomato — none use public Workday.
+  # These global companies do, with large Bangalore/Hyderabad offices.
+  - { slug: adobe,        source_type: workday,    board_id: "adobe:wd5:external_experienced",     enabled: true }   # ✓ huge Bangalore office (1162 postings)
+  - { slug: nvidia,       source_type: workday,    board_id: "nvidia:wd5:NVIDIAExternalCareerSite", enabled: true }   # ✓ Bangalore + Hyderabad (2000 postings)
+  - { slug: walmart,      source_type: workday,    board_id: "walmart:wd5:WalmartExternal",         enabled: true }   # ✓ Walmart Global Tech Bangalore (2000 postings)
+  - { slug: autodesk,     source_type: workday,    board_id: "autodesk:wd1:Ext",                    enabled: true }   # ✓ Bangalore (689 postings)
+
+  # ── More AI-native companies (added 2026-04-26) ──
+  - { slug: huggingface,  source_type: greenhouse, board_id: huggingface,  enabled: false }  # 404 — try `huggingface` on Lever?
+  - { slug: cohere,       source_type: ashby,      board_id: cohere,       enabled: true }   # ✓ moved to Ashby (114 postings)
+  - { slug: cursor,       source_type: ashby,      board_id: cursor,       enabled: true }   # ✓ on Ashby directly (71 postings)
+  - { slug: glean,        source_type: greenhouse, board_id: gleanwork,    enabled: true }   # ✓ 177 postings
+  - { slug: perplexity,   source_type: ashby,      board_id: perplexity,   enabled: true }   # ✓ 72 postings
+  - { slug: replit,       source_type: ashby,      board_id: replit,       enabled: true }   # ✓ moved to Ashby (84 postings)
+  - { slug: modal,        source_type: ashby,      board_id: modal,        enabled: true }   # ✓ 28 postings
+  - { slug: togetherai,   source_type: lever,      board_id: togetherai,   enabled: false }  # 404
+  - { slug: sentry,       source_type: ashby,      board_id: sentry,       enabled: true }   # ✓ moved to Ashby (41 postings)
+  - { slug: harvey,       source_type: ashby,      board_id: harvey,       enabled: true }   # ✓ 241 postings
+  - { slug: browserbase,  source_type: ashby,      board_id: browserbase,  enabled: true }   # ✓ 9 postings
+  - { slug: inngest,      source_type: ashby,      board_id: inngest,      enabled: true }   # ✓ 3 postings
+
+  # ── Growth-stage with strong India offices (added 2026-04-26) ──
+  - { slug: mongodb,      source_type: greenhouse, board_id: mongodb,      enabled: true }   # ✓ 433 postings
+  - { slug: atlassian,    source_type: lever,      board_id: atlassian,    enabled: true }   # 0 postings on verify
+  - { slug: plaid,        source_type: lever,      board_id: plaid,        enabled: true }   # ✓ moved to Lever (92 postings)
+  - { slug: datadog,      source_type: greenhouse, board_id: datadog,      enabled: true }   # ✓ 430 postings
+  - { slug: twilio,       source_type: greenhouse, board_id: twilio,       enabled: true }   # ✓ 143 postings
+  - { slug: snowflake,    source_type: greenhouse, board_id: snowflake,    enabled: false }  # 404
+  - { slug: databricks,   source_type: greenhouse, board_id: databricks,   enabled: true }   # ✓ 830 postings
+  - { slug: confluent,    source_type: greenhouse, board_id: confluent,    enabled: false }  # 404
+  - { slug: hashicorp,    source_type: greenhouse, board_id: hashicorp,    enabled: false }  # 404
+  - { slug: scaleai,      source_type: greenhouse, board_id: scaleai,      enabled: true }   # ✓ 172 postings
+
+  # ── Free aggregators (added 2026-04-26) ──
+  - { slug: remoteok,     source_type: remoteok,   board_id: ALL,          enabled: true }
+  - { slug: remotive,     source_type: remotive,   board_id: ALL,          enabled: true }
+  - { slug: arbeitnow,    source_type: arbeitnow,  board_id: ALL,          enabled: true }
+  - { slug: hasjob,       source_type: hasjob,     board_id: ALL,          enabled: true }   # India-focused (Atom feed, ~16-50 postings)
+
+  # ── Aggregators (different scraper class — see §7.2) ──
+  - { slug: yc_waas,      source_type: yc_waas,    board_id: ALL,          enabled: false }  # 404 — unofficial endpoint changed; needs source rewrite
+  - { slug: hn_hiring,    source_type: hn_hiring,  board_id: ALL,          enabled: true }   # only runs days 1-3 of month
+
+  # ── Deferred to v2 (uncomment when paid proxy in place) ──
+  # - { slug: wellfound,  source_type: wellfound,  board_id: ALL,          enabled: false }
+  # - { slug: linkedin,   source_type: linkedin,   board_id: ALL,          enabled: false }

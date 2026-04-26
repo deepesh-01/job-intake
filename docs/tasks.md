@@ -635,7 +635,67 @@ for the last UI poll.
 - Original v1 design preserved at
   `docs/job-intake-design-v1-original.md`
 
-## 21.2 — git init + GitHub publish (this section will fill in)
+## 21.2 — git init + GitHub publish
+- `git init` in `~/Documents/ready-to-apply/`
+- Identity copied from resume-bot: `Deepesh Rathod / 60640528+deepesh-01@users.noreply.github.com`
+- `gh auth switch -u deepesh-01` (was on work account `deepesh-zoca`)
+- `gh repo create deepesh-01/job-intake --public --source . --push`
+- Live at https://github.com/deepesh-01/job-intake
+
+---
+
+# Step 22 — LinkedIn (free, unauthenticated guest endpoint)
+
+Original v1 design deferred LinkedIn to v2 ("needs paid proxy"). Found
+the free path: `linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search`
+returns HTML cards without auth. ~50 reqs before 429.
+
+## 22.1 — `src/scout/sources/linkedin.py` (~30 min)
+- Probe-confirmed shape: `<div class="base-card" data-entity-urn="urn:li:jobPosting:...">`
+  with title / company / location / link / time inside.
+- Multi-search: `board_id` is `kw=...;loc=...;tpr=...;wt=...;exp=...;details=...`
+  (semicolon key=value).
+- Universal ID: `linkedin:ALL:<urn_numeric>` so the same job surfaced via
+  two different searches dedups naturally.
+- Detail-fetch (`/jobs-guest/jobs/api/jobPosting/<id>`) is on by default
+  for richer JD body → sharper tagging. On 429, loop bails gracefully
+  with whatever it got.
+- Cap 25 postings/board. Throttled 1 req/sec via shared host throttle.
+
+## 22.2 — Wire up + 5 starter searches (~5 min)
+- Registered in `runner._SOURCE_MODULES` and `verify_boards.py`
+- Added `linkedin` to the <200-char-body bypass set (alongside
+  `hn_hiring` and `workday`)
+- Starter boards in `boards.yaml`:
+  - `li_blr_senior_backend` — Senior Backend Engineer · Bengaluru · past week · mid-senior+
+  - `li_blr_staff_swe` — Staff Software Engineer · Bengaluru
+  - `li_blr_full_stack` — Senior Full-Stack Engineer · Bengaluru
+  - `li_india_remote_ai` — AI Engineer · India · Remote · mid-senior+
+  - `li_india_founding_eng` — Founding Engineer · India
+
+## 22.3 — Live test
+- 5 boards × 10 cards = 50 search-result postings
+- 28 made it to Sheet after dedup (LinkedIn often surfaces the same role
+  via multiple searches; universal urn ID dedups them in-batch)
+- **Quality gain:** 39% senior+app_eng, **96% target_city**,
+  **61% resume_strong** — far higher hit rate than any other source.
+- Surfaced India brand-name companies otherwise hard to reach: Roku,
+  Intuit, Thomson Reuters, Reliance, HDFC, Walmart Global Tech, Deltek,
+  Epsilon, Mitratech.
+
+## 22.4 — Risks + caveats (logged for future-self)
+- **TOS-grey** — public job pages are scrapeable in practice but technically
+  against LinkedIn TOS. Single-user, daily, ≤50 reqs is well within the
+  zone they tolerate; commercial-scale scraping invites a cease-and-desist.
+- **Markup drift** — `base-card` selector + URN format have been stable
+  for years but a redesign could break parsing. Recovery: re-probe with
+  the curl-then-selectolax pattern in step 22.1 and update selectors.
+- **429 risk** — capped at 25 postings × 5 boards × ~2 reqs each = ~250
+  reqs/scout. We sit just under threshold. If we expand, expect 429s
+  and either reduce boards or add backoff / IP rotation.
+- **Empty JD body if rate-limited** — detail-fetch loop bails on first
+  429; affected rows fall back to title+company+location only (still
+  searchable, less precise tag firing).
 
 ---
 

@@ -27,6 +27,7 @@ _SOURCE_MODULES = {
     "arbeitnow": "scout.sources.arbeitnow",
     "hasjob": "scout.sources.hasjob",
     "workday": "scout.sources.workday",
+    "linkedin": "scout.sources.linkedin",
 }
 
 

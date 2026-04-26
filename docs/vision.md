@@ -64,13 +64,17 @@ would make the loop genuinely autonomous. In rough priority:
 
 ### Tier 1 — Coverage (data wins compound)
 
+- ~~**LinkedIn via paid proxy.**~~ **Shipped free** in step 22 — used the
+  unauthenticated guest endpoint (`/jobs-guest/jobs/api/seeMoreJobPostings/
+  search`) with HTML parsing. 5 starter searches yield 25-50 high-quality
+  India senior IC postings per scout pass. 96% target_city, 61% resume_strong.
 - **More verified India boards.** Most Indian unicorns use custom careers
   pages. Build per-company HTML scrapers for the 5-10 highest-value targets
   (Swiggy, Zomato, Cars24, Cleartrip, PhonePe via Workday) — each gets
   ~30-100 senior IC openings into the funnel.
-- **LinkedIn via paid proxy.** $50/mo Proxycurl unlocks ~10x the inflow.
-  The deferred design entry in `boards.yaml` already exists; add the source
-  client + key.
+- **Add more LinkedIn search queries.** Each query is essentially free; the
+  ceiling is the per-scout 429 threshold (~250 reqs total). Worth adding
+  variants like "principal engineer", "tech lead", specific stacks.
 - **Wellfound (free, behind anti-bot).** Headed Playwright + cookies works
   but requires care; defer to v2 still.
 - **GitHub Jobs / Stack Overflow Jobs replacements** (community-run aggregators

@@ -36,6 +36,7 @@ _SOURCE_MODULES = {
     "arbeitnow": "scout.sources.arbeitnow",
     "hasjob": "scout.sources.hasjob",
     "workday": "scout.sources.workday",
+    "linkedin": "scout.sources.linkedin",
 }
 
 # §7.3 — first run hard cap: 7-day cutoff so the Sheet doesn't flood.
@@ -233,12 +234,14 @@ def _enrich_one(
     if not p.jd_html and not p.role:
         return None
     jd_text = extract.html_to_text(p.jd_html)
-    if len(jd_text) < 200 and source_type not in {"hn_hiring", "workday"}:
+    if len(jd_text) < 200 and source_type not in {"hn_hiring", "workday", "linkedin"}:
         # HN postings are often very short by design.
         # Workday list responses don't include the JD body — only title +
         # bullet taglines, typically ~50 chars total. Body would require
         # an N+1 detail fetch per posting (slow + rate-limit risky).
-        # We accept the lower-fidelity row and let title/location drive tags.
+        # LinkedIn cards may also have empty bodies if detail-fetch was
+        # disabled or rate-limited. We accept the lower-fidelity row and
+        # let title/location drive tags.
         return None
 
     # First-run cutoff per §7.3

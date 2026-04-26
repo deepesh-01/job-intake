@@ -27,6 +27,19 @@ For the *chronological build log* see [`tasks.md`](./tasks.md).
    `status=tailor` rows, calls into System A's `cli-tailor.js`, writes Drive
    URL back.
 
+**Sources** (9 types, 35+ enabled boards):
+
+| Source type | Auth | Notes |
+|---|---|---|
+| `greenhouse` | none | JSON API, most stable |
+| `lever` | none | JSON API |
+| `ashby` | none | JSON API; sometimes returns structured comp |
+| `workday` | none | List endpoint only — no JD body in response (lower-fidelity tagging). Browser UA required. `limit > 20` returns 400. board_id format: `tenant:sub:site` |
+| `remoteok` / `remotive` / `arbeitnow` | none | Free remote-job aggregators |
+| `hasjob` | none | India-focused, Atom feed (legacy JSON API is dead) |
+| `hn_hiring` | none | Algolia API; runs only days 1-3 of month |
+| `linkedin` | none — guest endpoint | TOS-grey but free. 25 postings/board cap; 5 boards × 25 ≈ 250 reqs/scout. board_id format: `kw=...;loc=...;tpr=...;wt=...;exp=...` |
+
 **Three persistence layers:**
 
 1. **Google Sheet** (`SHEET_ID` in `.env`) — three tabs: `Jobs` (the data),

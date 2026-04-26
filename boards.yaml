@@ -95,6 +95,17 @@ boards:
   - { slug: yc_waas,      source_type: yc_waas,    board_id: ALL,          enabled: false }  # 404 — unofficial endpoint changed; needs source rewrite
   - { slug: hn_hiring,    source_type: hn_hiring,  board_id: ALL,          enabled: true }   # only runs days 1-3 of month
 
+  # ── LinkedIn — unauthenticated guest endpoint (added 2026-04-27) ──
+  # board_id format: kw=...;loc=...;tpr=...;wt=...;exp=...;details=true
+  # tpr: r604800=past week, r86400=past 24h. wt: 2=remote. exp: 4=mid-senior, 5=director.
+  # Cap is 25 postings per board; ~50 LinkedIn reqs total before 429 risk.
+  # Starter set covers your senior IC + India + AI focus.
+  - { slug: li_blr_senior_backend, source_type: linkedin, board_id: "kw=senior backend engineer;loc=Bengaluru;tpr=r604800;exp=4,5",   enabled: true }
+  - { slug: li_blr_staff_swe,      source_type: linkedin, board_id: "kw=staff software engineer;loc=Bengaluru;tpr=r604800;exp=4,5",  enabled: true }
+  - { slug: li_blr_full_stack,     source_type: linkedin, board_id: "kw=senior full stack engineer;loc=Bengaluru;tpr=r604800;exp=4,5", enabled: true }
+  - { slug: li_india_remote_ai,    source_type: linkedin, board_id: "kw=ai engineer;loc=India;tpr=r604800;wt=2;exp=4,5",             enabled: true }
+  - { slug: li_india_founding_eng, source_type: linkedin, board_id: "kw=founding engineer;loc=India;tpr=r604800;exp=4,5",            enabled: true }
+
   # ── Deferred to v2 (uncomment when paid proxy in place) ──
   # - { slug: wellfound,  source_type: wellfound,  board_id: ALL,          enabled: false }
   # - { slug: linkedin,   source_type: linkedin,   board_id: ALL,          enabled: false }

@@ -83,6 +83,29 @@ Daily flow:
 7. Click the Drive URL → review the PDF → apply on the company's site → mark
    `applied`.
 
+### Install as a phone app (PWA)
+
+The webapp is a Progressive Web App — installable on iOS + Android home
+screens, opens standalone (no browser chrome).
+
+**iOS Safari:**
+1. Open the **owner URL** (with `?token=…`) once on Safari.
+2. Tap the Share button → **Add to Home Screen** → **Add**.
+3. Icon appears on home screen. Tap → opens fullscreen, dark-themed,
+   feels native. Token persists in standalone localStorage so you stay
+   in owner mode.
+
+**Android Chrome:**
+1. Open the owner URL.
+2. Three-dot menu → **Install app** (or **Add to Home Screen**).
+3. Same standalone behavior.
+
+PWA assets at `/manifest.webmanifest`, `/sw.js`,
+`/icon-{192,512,maskable-512}.png`, `/apple-touch-icon.png`. To redesign
+icons: re-run the Pillow generation script in `tasks.md` Step 27.1, then
+bump `?v=N` in `index.html` + `manifest.webmanifest` to bust Cloudflare's
+edge cache.
+
 ---
 
 ## Prerequisites (one-time)

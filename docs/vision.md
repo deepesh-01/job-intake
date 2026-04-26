@@ -99,6 +99,10 @@ would make the loop genuinely autonomous. In rough priority:
 
 ### Tier 3 — Loop closure (less manual work)
 
+- ~~**Tinder-style triage UI.**~~ **Shipped** — card-stack view with
+  swipe gestures (right=tailor, left=reject, up=skip, tap=open).
+  Locked to `status=new`. Viewer mode mirrors the animation without
+  mutating, so friends get the full UX.
 - **Auto-apply to the highest-confidence rows.** When a row is
   `comp_ok + target_city + resume_strong + ai_native`, the user is going to
   apply. Build a per-ATS submission helper (Greenhouse + Lever have public

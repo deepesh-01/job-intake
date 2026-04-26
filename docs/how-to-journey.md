@@ -361,11 +361,42 @@ To revoke owner access (token leak): rotate `WRITE_TOKEN` in `.env`,
 `launchctl kickstart -k gui/$(id -u)/com.user.jobintake.web`. Old tokens
 become 403.
 
+### Two view modes
+
+Toggle in the filter bar (segmented control on the right, list icon
+vs layers icon):
+
+| View | Best for | What it does |
+|---|---|---|
+| **List** | Browsing, filtering across statuses, comparing rows side-by-side | Card grid sorted by `resume_match` desc; status pills + tag toggles + search box drive what's visible |
+| **Cards** | Daily triage of new rows | Tinder-style swipe stack. Locked to `status=new` (status pills ignored in this mode); other filters still apply |
+
+### Card view gestures
+
+| Action | Swipe | Button | Effect |
+|---|---|---|---|
+| **Tailor** | → right | green ✓ | `status=tailor` (Process queue picks it up) |
+| **Reject** | ← left | red ✗ | `status=rejected` |
+| **Skip** | ↑ up | amber ↑ | No DB write — card hides locally, returns on hard refresh |
+| **Open detail** | tap card | "Open" pill | Opens the JobDetail drawer |
+
+Drag-direction overlays appear at 40% threshold (TAILOR / REJECT / SKIP);
+card rotates ±15° with X movement; below threshold the card springs
+back. Stack of 3 cards visible (top draggable, others scaled behind for
+depth). Empty state: "🎉 All caught up!"
+
+In **viewer mode** (no token), the swipe animation works exactly the
+same — cards fly off — but no Sheet write happens. Toast confirms
+*"Would queue for tailoring · Preview mode — only the owner can
+change job status."* Cards come back on hard refresh.
+
 ### Animations + interaction model
 
 - **Card list:** instant render on filter change (no per-card animation
   to avoid the wave/shake — `keepPreviousData` so the old list stays
   visible during refetch).
+- **Card stack:** spring physics on stack reflow; drag uses framer-
+  motion's `dragSnapToOrigin`.
 - **Detail drawer:** vaul-style; bottom sheet on mobile, side panel on
   desktop. Spring transition.
 - **Status changes:** optimistic + sonner toast confirms.
@@ -383,6 +414,16 @@ become 403.
 - Scout (when run via launchd): `~/Documents/ready-to-apply/data/launchd.{out,err}.log`
 - Webapp: `~/Documents/ready-to-apply/data/web.{out,err}.log`
 - Watchdog spawning resume-builder: `~/bot/logs/watchdog-jobintake.log`
+- **Cross-watchdog restart log:** `~/bot/logs/restarts.log` — both
+  jobintake and resume-builder's launchd watchdog write here.
+  Format:
+  ```
+  [ISO_TS] BEGIN triggered_by=<id> reason=<...> pids_to_kill=[...]
+  [ISO_TS] FREED port=8787 killed_listeners=[...]   (when port-cleanup fires)
+  [ISO_TS] END   triggered_by=<id> killed=[...] new_pids=[...]
+  ```
+  `triggered_by` values: `jobintake-webapp` or `launchd-watchdog`.
+  `tail -f` to attribute every restart.
 - Sheet's `Log` tab — start/finish/error events for scout + processor
 
 ### Tail commands

@@ -705,6 +705,97 @@ returns HTML cards without auth. ~50 reqs before 429.
 
 ---
 
+# Step 23 — Watchdog: unified restart log + port-8787 cleanup
+
+User noticed bot getting restarted every 2 min in the launchd watchdog
+log. Diagnosis: bot's internal health endpoint server can't bind
+127.0.0.1:8787 because a previous bot's child still holds it →
+EADDRINUSE → npm start crashes → watchdog notices in 2 min, tries
+again, same crash. Fix in two parts:
+
+## 23.1 — Unified restart log (ADR-020)
+- Both watchdogs (jobintake + launchd) now write BEGIN/END markers
+  to a single shared file at `~/bot/logs/restarts.log`.
+- Format: `[ISO_TS] BEGIN triggered_by=<id> reason=<...> pids_to_kill=[...]`
+  + END line with the new PIDs.
+- `bot_health.restart_bot()` accepts `triggered_by` + `reason` kwargs.
+  - `/api/bot/restart` → `triggered_by="jobintake-webapp" reason="manual-ui"`
+  - `_auto_watchdog_loop` → `triggered_by="jobintake-webapp" reason="auto-hung age=Ns"` or `"auto-down"`
+- Wrote a paste-ready prompt for the resume-builder side to add the
+  matching writes to its bash watchdog (covered as a build step on
+  System A's tasks.md when applied).
+
+## 23.2 — Port-8787 cleanup before npm start (ADR-021)
+- `bot_health._free_port(port)` runs `lsof -tiTCP:<port> -sTCP:LISTEN`
+  + `kill -KILL` on any matching PID, then logs
+  `FREED port=8787 killed_listeners=[...]` to the restart log.
+- Called inside `restart_bot()` after the SIGINT/SIGKILL grace window
+  but before `npm start`.
+- Mirror line for the bash watchdog written into the resume-builder
+  prompt; same protocol on both sides.
+
+**Result:** the 2-min restart loop dies the moment either watchdog runs.
+
+---
+
+# Step 24 — Tinder-style card swipe view for triage
+
+A friend's idea: the morning triage workflow (browse new rows, decide
+tailor / reject) is fundamentally a Tinder gesture. Built as an
+alternative view alongside the list, with a toggle in the FilterBar.
+
+## 24.1 — `SwipeCard` component (~120 lines)
+- framer-motion `useMotionValue` + `useTransform` for X (rotate ±15°)
+  and direction-overlay opacity.
+- Drag handler computes both X + Y offset & velocity:
+  - Right past 110px or velocity 600/s → exit-right + `onSwipeRight`
+  - Left past -110px or velocity -600/s → exit-left + `onSwipeLeft`
+  - Up past -90px (vertical wins when |dy| > |dx|) → exit-up + `onSwipeUp`
+  - Otherwise → `dragSnapToOrigin` bounces back
+- Three drag-direction overlays: TAILOR (green right), REJECT (red left),
+  SKIP (amber center/up). Opacity animates with drag distance.
+- Stack offset/scale only on non-top cards (visual depth).
+- Tap (no drag) → opens existing JobDetail drawer.
+
+## 24.2 — `CardStack` component (~140 lines)
+- Pulls `status=["new"]` ALWAYS — card view is intentionally locked
+  to fresh inflow. User's status pills in the FilterBar are ignored
+  here (other filters still apply).
+- Renders top 3 cards stacked, top one interactive, others scaled-down
+  behind for visual depth.
+- Local `removedIds` set pops cards optimistically on swipe; refetch
+  catches up via TanStack Query invalidation.
+- Action button row below the stack: ✗ (left) · ↑ (up/skip) · Open
+  · ✓ (right) — fallback for desktop, accessibility, and decision-
+  paralysis users.
+- Empty state: "🎉 All caught up!" when stack exhausts.
+
+## 24.3 — View toggle in FilterBar
+- Segmented control (List icon / Layers icon) on the right side of
+  the status-pill row.
+- App.tsx tracks `view: "list" | "cards"` state and conditionally
+  renders `<JobsList>` or `<CardStack>`.
+
+## 24.4 — Viewer-mode behavior (the killer detail)
+First version had viewers' swipes bounce back (to prevent mutation).
+User feedback: "we want everyone to experience the full UX". Changed
+to: ALL viewers see the card fly off in the swipe direction — same
+animation as owner mode — but mutations are skipped. Toast confirms
+"Would queue for tailoring · Preview mode — only the owner can change
+job status". Cards come back on hard refresh.
+
+## 24.5 — Smoke checklist
+- [x] Owner: right-swipe a card → status=tailor + queue badge updates
+- [x] Owner: left-swipe → status=rejected
+- [x] Owner: up-swipe → no DB change, card hides locally
+- [x] Owner: tap → JobDetail drawer opens
+- [x] Viewer: same swipe animations work, no Sheet writes, toast says "would..."
+- [x] Switch toggle to list view → original list view renders
+- [x] Card view ignores status filter pills (always shows status=new)
+- [x] Empty state when stack exhausts
+
+---
+
 ## Out of scope (current)
 
 These are deliberate non-goals or deferred to v3 — see `vision.md` for

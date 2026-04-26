@@ -522,7 +522,10 @@ def bot_health_endpoint() -> dict:
 def bot_restart_endpoint(request: Request) -> dict:
     """Owner-only manual restart. Mutates the system."""
     _require_write_auth(request)
-    return {"ok": True, **bot_health.restart_bot()}
+    return {"ok": True, **bot_health.restart_bot(
+        triggered_by="jobintake-webapp",
+        reason="manual-ui",
+    )}
 
 
 # ────────────────────────────── auto-restart background task ──────────────────
@@ -551,10 +554,18 @@ async def _auto_watchdog_loop() -> None:
                 )
                 # Run restart in a thread so we don't block the event loop
                 # (it sleeps several seconds for graceful shutdown).
-                await asyncio.to_thread(bot_health.restart_bot)
+                await asyncio.to_thread(
+                    bot_health.restart_bot,
+                    triggered_by="jobintake-webapp",
+                    reason=f"auto-hung age={int(h.heartbeat_age_seconds or 0)}s",
+                )
             elif not h.is_alive and bot_health.can_auto_restart():
                 log.warning("auto-restart: bot down")
-                await asyncio.to_thread(bot_health.restart_bot)
+                await asyncio.to_thread(
+                    bot_health.restart_bot,
+                    triggered_by="jobintake-webapp",
+                    reason="auto-down",
+                )
         except Exception as e:
             log.warning("watchdog tick failed: %s", e)
         await asyncio.sleep(_AUTO_WATCHDOG_INTERVAL)

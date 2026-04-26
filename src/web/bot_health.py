@@ -25,6 +25,11 @@ RESUME_BUILDER_ROOT = Path.home() / "Documents" / "resume-builder"
 HEARTBEAT_STALE_SECONDS = 180
 RESTART_COOLDOWN_SECONDS = 300  # don't auto-restart more than once per 5 min
 
+# Shared cross-watchdog log so you can see who triggered each restart.
+# `tail -f ~/bot/logs/restarts.log` shows the unified timeline.
+# Format: [ISO_TS] triggered_by=<id> reason=<...> pids_killed=[...] new_pids=[...]
+RESTART_LOG = Path.home() / "bot" / "logs" / "restarts.log"
+
 
 @dataclass(frozen=True)
 class BotHealth:
@@ -120,13 +125,56 @@ def can_auto_restart() -> bool:
     return (time.time() - _last_restart_at) >= RESTART_COOLDOWN_SECONDS
 
 
-def restart_bot() -> dict:
+def _free_port(port: int) -> list[int]:
+    """SIGKILL any process listening on `port`. Returns the PIDs killed.
+    Best-effort — failures don't raise. Used to clear EADDRINUSE before
+    the new bot's health-endpoint server tries to bind."""
+    try:
+        out = subprocess.run(
+            ["lsof", "-tiTCP:" + str(port), "-sTCP:LISTEN"],
+            capture_output=True, text=True, timeout=5,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return []
+    pids = [int(x) for x in (out.stdout or "").split() if x.isdigit()]
+    for pid in pids:
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except OSError:
+            pass
+    if pids:
+        _log_restart(
+            f"FREED port={port} killed_listeners={pids}"
+        )
+    return pids
+
+
+def _log_restart(line: str) -> None:
+    """Append one line to the shared cross-watchdog log."""
+    try:
+        RESTART_LOG.parent.mkdir(parents=True, exist_ok=True)
+        with RESTART_LOG.open("a") as f:
+            ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            f.write(f"[{ts}] {line}\n")
+    except OSError:
+        pass  # logging is best-effort
+
+
+def restart_bot(triggered_by: str = "jobintake-webapp", reason: str = "manual") -> dict:
     """Kill any existing bot PIDs (SIGINT, then SIGKILL), then `nohup npm start`
-    from the resume-builder root. Returns a small status dict."""
+    from the resume-builder root. Returns a small status dict.
+
+    `triggered_by` and `reason` are written to the shared restart log so
+    you can attribute every restart event in `~/bot/logs/restarts.log`."""
     global _last_restart_at
     _last_restart_at = time.time()
 
     pids = _find_bot_pids()
+    _log_restart(
+        f"BEGIN triggered_by={triggered_by} reason={reason} "
+        f"pids_to_kill={list(pids)}"
+    )
+
     killed: list[int] = []
     for pid in pids:
         try:
@@ -147,6 +195,13 @@ def restart_bot() -> dict:
             pass
 
     time.sleep(1)
+
+    # Free port 8787 before spawning. The bot's internal health-endpoint
+    # server binds 127.0.0.1:8787; if a previous bot's child process (or
+    # a crashed-but-not-reaped instance) still holds it, the new `npm
+    # start` fails with EADDRINUSE and we loop. Killing whatever holds
+    # the port is the cheapest reliable break.
+    _free_port(8787)
 
     # Spawn fresh bot. Detached so it survives uvicorn restart / SIGTERM.
     log_path = Path.home() / "bot" / "logs" / "watchdog-jobintake.log"
@@ -172,9 +227,14 @@ def restart_bot() -> dict:
 
     time.sleep(4)
     new_pids = _find_bot_pids()
+    _log_restart(
+        f"END   triggered_by={triggered_by} reason={reason} "
+        f"killed={killed} spawn_pid={proc.pid} new_pids={list(new_pids)}"
+    )
     return {
         "killed_pids": list(killed),
         "spawn_pid": proc.pid,
         "new_pids": list(new_pids),
         "log_path": str(log_path),
+        "restart_log": str(RESTART_LOG),
     }

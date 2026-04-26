@@ -12,6 +12,7 @@ tailoring side.
 - **[Vision](./docs/vision.md)** — what the system is now, 10x roadmap
 - **[How-to Journey](./docs/how-to-journey.md)** — operational guide
 - **[Build log](./docs/tasks.md)** — chronological build steps
+- **[Decisions](./docs/decisions.md)** — ADR log of non-obvious choices
 - **[Original v1 design](./docs/job-intake-design-v1-original.md)** — frozen for history
 
 ## Architecture (one-liner)

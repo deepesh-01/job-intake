@@ -1,10 +1,11 @@
 import { useState } from "react"
 import { JobsList } from "./components/JobsList"
-import { FilterBar, type Filters } from "./components/FilterBar"
+import { FilterBar, type Filters, type ViewMode } from "./components/FilterBar"
 import { JobDetail } from "./components/JobDetail"
 import { ProcessorButton } from "./components/ProcessorButton"
 import { Header } from "./components/Header"
 import { PreviewBanner } from "./components/PreviewBanner"
+import { CardStack } from "./components/CardStack"
 
 export function App() {
   const [filters, setFilters] = useState<Filters>({
@@ -16,6 +17,7 @@ export function App() {
     q: "",
     sort: "resume_match_desc",
   })
+  const [view, setView] = useState<ViewMode>("list")
   const [openId, setOpenId] = useState<string | null>(null)
 
   return (
@@ -25,10 +27,14 @@ export function App() {
       <div className="sticky top-0 z-40">
         <PreviewBanner />
         <Header />
-        <FilterBar value={filters} onChange={setFilters} />
+        <FilterBar value={filters} onChange={setFilters} view={view} onViewChange={setView} />
       </div>
       <main className="flex-1 container mx-auto pb-32 pt-2">
-        <JobsList filters={filters} onOpen={setOpenId} />
+        {view === "list" ? (
+          <JobsList filters={filters} onOpen={setOpenId} />
+        ) : (
+          <CardStack filters={filters} onOpen={setOpenId} />
+        )}
       </main>
       <ProcessorButton />
       <JobDetail id={openId} onClose={() => setOpenId(null)} />

@@ -1,7 +1,9 @@
 import { useState } from "react"
-import { Search, SlidersHorizontal, X } from "lucide-react"
+import { Layers, List, Search, SlidersHorizontal, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { motion, AnimatePresence } from "framer-motion"
+
+export type ViewMode = "list" | "cards"
 
 export interface Filters {
   status: string[]
@@ -30,9 +32,13 @@ const SORT_OPTIONS = [
 export function FilterBar({
   value,
   onChange,
+  view,
+  onViewChange,
 }: {
   value: Filters
   onChange: (f: Filters) => void
+  view: ViewMode
+  onViewChange: (v: ViewMode) => void
 }) {
   const [showAdvanced, setShowAdvanced] = useState(false)
 
@@ -68,6 +74,35 @@ export function FilterBar({
             )
           })}
           <div className="grow" />
+          {/* List vs Card view toggle — segmented control */}
+          <div className="shrink-0 inline-flex items-center bg-muted/40 rounded-full p-0.5">
+            <button
+              onClick={() => onViewChange("list")}
+              className={cn(
+                "size-7 grid place-items-center rounded-full transition-all",
+                view === "list"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+              aria-label="List view"
+              title="List view — browse + filter"
+            >
+              <List className="size-3.5" />
+            </button>
+            <button
+              onClick={() => onViewChange("cards")}
+              className={cn(
+                "size-7 grid place-items-center rounded-full transition-all",
+                view === "cards"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+              aria-label="Card view"
+              title="Card view — swipe to triage"
+            >
+              <Layers className="size-3.5" />
+            </button>
+          </div>
           <button
             onClick={() => setShowAdvanced((s) => !s)}
             className={cn(

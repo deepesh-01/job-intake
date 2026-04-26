@@ -472,6 +472,8 @@ launchctl kickstart -k gui/$(id -u)/com.welog.cloudflared
 | Webapp shows `502` | API down | `launchctl kickstart -k gui/$(id -u)/com.user.jobintake.web` |
 | Bot health chip says "hung" or "down" | Resume bot stuck | Auto-restart fires within 60s; manual via the chip's button |
 | Sheet PATCH 403 from public URL | No write token | Open the owner URL once with `?token=…` |
+| Tailor errors with `bridge_error: No such file or directory: 'node'` | fnm node path missing from launchd-spawned subprocess PATH | Already mitigated in plist + api.py (ADR-022). If recurs, verify `/Users/deepeshz2/.local/share/fnm/aliases/default/bin` is the first segment of `EnvironmentVariables.PATH` in `~/Library/LaunchAgents/com.user.jobintake.web.plist` |
+| Some rows landed in `status=error` | Tailor pipeline failed mid-run | Filter to "Errored" status pill in webapp → "Retry all" button bulk-resets to `status=tailor`. Each row's `last_change` cell shows the original error reason |
 | `comp_ok` rate way down | Floor changes / parser regression | Sample 10 JDs, eyeball the `comp_string` cell, tune `inr_floor` / `usd_floor` |
 | Same job twice in Sheet | Fuzzy-dedup miss | Edit distance threshold is 3 in `dedup.py:fuzzy_collision` — bump to 5 |
 | Schema mismatch on startup | Bumped `SCHEMA_VERSION` without migrating | `uv run python -c "from sheet.migrate import migrate; from sheet.client import SheetClient; from lib.config import load_env; e=load_env(); migrate(SheetClient(e.creds_path, e.sheet_id))"` |

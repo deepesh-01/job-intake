@@ -154,6 +154,18 @@ export async function fetchHealth(): Promise<{ ok: boolean; read_only: boolean }
   return jget("/api/health")
 }
 
+export async function retryErrored(): Promise<{ reset: number; job_ids: string[] }> {
+  const r = await fetch("/api/jobs/retry-errored", {
+    method: "POST",
+    headers: authHeaders(),
+  })
+  if (!r.ok) {
+    if (r.status === 403) throw new Error("Read-only — owner only")
+    throw new Error(`retry-errored ${r.status}`)
+  }
+  return r.json()
+}
+
 export interface ProcessStatus {
   is_running: boolean
   current_id: string | null

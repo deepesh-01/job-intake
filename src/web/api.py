@@ -379,6 +379,45 @@ def patch_job(job_id: str, payload: JobUpdate, request: Request) -> JobDetail:
     return _to_detail(row)
 
 
+class RetryResponse(BaseModel):
+    reset: int
+    job_ids: list[str]
+
+
+@app.post("/api/jobs/retry-errored", response_model=RetryResponse)
+def retry_errored(request: Request) -> RetryResponse:
+    """Owner-only. Bulk-resets every status=error row back to status=tailor
+    and clears last_change + tailored_at so they re-enter the queue cleanly.
+    Returns the count + list of ids that were reset.
+
+    The Processor on the next sweep picks them up. If the underlying root
+    cause persists, they'll error again — explicitly user-driven retry,
+    no auto-loop."""
+    _require_write_auth(request)
+
+    snap = _load_snapshot()
+    errored: list[tuple[int, str]] = [
+        (r["_row"], r.get("id", ""))
+        for r in snap.rows
+        if (r.get("status") or "") == schema.STATUS_ERROR
+    ]
+    if not errored:
+        return RetryResponse(reset=0, job_ids=[])
+
+    ws = _sheet._ws(schema.JOBS_TAB)
+    body: list[dict] = []
+    status_col = schema.col_letter("status")
+    last_change_col = schema.col_letter("last_change")
+    tailored_at_col = schema.col_letter("tailored_at")
+    for row_idx, _ in errored:
+        body.append({"range": f"{status_col}{row_idx}", "values": [[schema.STATUS_TAILOR]]})
+        body.append({"range": f"{last_change_col}{row_idx}", "values": [[""]]})
+        body.append({"range": f"{tailored_at_col}{row_idx}", "values": [[""]]})
+    ws.batch_update(body, value_input_option="USER_ENTERED")
+    _cache.invalidate()
+    return RetryResponse(reset=len(errored), job_ids=[i for _, i in errored])
+
+
 @app.get("/api/stats", response_model=StatsResponse)
 def stats() -> StatsResponse:
     import time as _time
@@ -586,12 +625,23 @@ async def process_queue(request: Request) -> dict:
     Streams nothing — returns once the process exits.
     Long-running (~5 min per row) so the UI should poll `/api/stats`
     or just optimistically refresh after a while."""
+    # tailor_bridge spawns `node dist/cli-tailor.js`. The launchd-managed
+    # webapp inherits a PATH that doesn't include fnm's node binary, so
+    # explicitly prepend it here too. Belt + suspenders: the plist's
+    # EnvironmentVariables PATH is set the same way.
+    fnm_node = str(Path.home() / ".local/share/fnm/aliases/default/bin")
+    parent_path = os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin")
+    augmented_path = f"{fnm_node}:{parent_path}" if fnm_node not in parent_path else parent_path
     proc = await asyncio.create_subprocess_exec(
         sys.executable,
         "-m",
         "processor.runner",
         cwd=str(Path(__file__).resolve().parent.parent.parent),
-        env={**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parent.parent)},
+        env={
+            **os.environ,
+            "PATH": augmented_path,
+            "PYTHONPATH": str(Path(__file__).resolve().parent.parent),
+        },
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )

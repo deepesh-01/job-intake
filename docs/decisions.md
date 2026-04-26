@@ -437,3 +437,40 @@
 - We're SIGKILL'ing processes by port-binding, not by name match. If something legitimately *unrelated* binds 8787, we kill it. Acceptable: only the resume-builder bot binds 8787 in this user's setup.
 
 **Consequence.** A proper fix would be in resume-builder's health-endpoint server (`SO_REUSEADDR` or use port 0 / OS-assigned), so the OS releases the port immediately on child exit. Listed in vision.md as a future improvement; today's port-kill is the pragmatic patch.
+
+---
+
+## ADR-022 · Launchd plist always injects fnm node path; subprocess code re-injects too
+**Date:** 2026-04-27 · **Status:** Accepted
+
+**Context.** Webapp runs as `com.user.jobintake.web` launchd service.
+Its `/api/process` endpoint spawns the processor as a subprocess; that
+subprocess calls `node dist/cli-tailor.js`. The user's node is managed
+by fnm at `~/.local/share/fnm/aliases/default/bin/node` — NOT in any
+default macOS PATH.
+
+When the user triggered processor from the webapp, the subprocess
+inherited the launchd-defined PATH (which lacked the fnm path) and
+every tailor failed with `bridge_error: No such file or directory: 'node'`.
+8 rows landed in status=error before we caught it.
+
+**Decision.** Two layers, both required:
+
+1. **Plist `EnvironmentVariables.PATH` includes the fnm path** as the
+   first segment. So any subprocess of the webapp inherits a sane PATH.
+2. **`web/api.py:process_queue` explicitly augments PATH** when spawning
+   the processor subprocess: `env={..., "PATH": fnm_node + ":" + os.environ["PATH"]}`.
+
+**Reasoning.** The plist alone is fine on this user's machine, but a
+co-maintainer (or this user on a fresh deploy) might forget the plist
+edit. The api.py code is the safety net: even with a bare plist PATH,
+the subprocess always finds node. Belt + suspenders.
+
+**Trade-offs accepted.**
+- Hard-coded path `~/.local/share/fnm/aliases/default/bin` is fnm-
+  specific and macOS-flavored. If we ever target Linux + nvm, this
+  needs generalization (e.g. `which node` lookup at startup).
+
+**Consequence.** This pattern — explicitly compose PATH for child
+processes — should be applied to any other launchd-spawned background
+service that needs to reach for tools outside the system PATH.

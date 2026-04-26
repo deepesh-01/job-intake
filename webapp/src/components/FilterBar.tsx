@@ -21,6 +21,7 @@ const STATUS_OPTIONS = [
   { value: "applied", label: "Applied" },
   { value: "rejected", label: "Rejected" },
   { value: "skip", label: "Skipped" },
+  { value: "error", label: "Errored" },
 ]
 
 const SORT_OPTIONS = [

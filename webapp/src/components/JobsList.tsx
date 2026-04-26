@@ -3,6 +3,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { fetchJobs, fetchStats } from "@/lib/api"
 import { JobCard } from "./JobCard"
 import { type Filters } from "./FilterBar"
+import { RetryErroredBanner } from "./RetryErroredBanner"
 
 export function JobsList({
   filters,
@@ -68,6 +69,7 @@ export function JobsList({
 
   return (
     <div className="pt-3">
+      <RetryErroredBanner statusFilter={filters.status} />
       <div className="px-1 pb-2 text-xs text-muted-foreground tabular-nums flex items-center gap-2 flex-wrap min-h-5">
         <span>{data.total} {data.total === 1 ? "job" : "jobs"}</span>
         {hiddenByTags > 0 && (

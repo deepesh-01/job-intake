@@ -841,6 +841,64 @@ CardStack server-side overrode params to status=["new"] always. Confusing.
 
 ---
 
+# Step 26 — Bugfix: launchd-spawned subprocess missing `node` in PATH; + Error filter / bulk-retry UI
+
+User triggered processor from webapp's "Process queue" → 8 rows landed in
+status=error with `last_change=bridge_error: [Errno 2] No such file or
+directory: 'node'`.
+
+**Root cause.** The webapp runs as `com.user.jobintake.web` launchd
+service. Its plist had `PATH = /Users/deepeshz2/.local/bin:/opt/homebrew/
+bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`. `node` lives at
+`/Users/deepeshz2/.local/share/fnm/aliases/default/bin/node` (managed by
+fnm). When `/api/process` spawned the processor subprocess (which in
+turn spawned `node dist/cli-tailor.js`), the fnm path wasn't in PATH,
+`node` wasn't found, every tailor failed.
+
+When run from terminal, fnm's shell-init injects the node bin into
+PATH, so `python -m processor.runner` from a terminal worked fine.
+The error only appeared on webapp-triggered runs.
+
+## 26.1 — Two-layer fix (belt + suspenders)
+1. **Plist** `com.user.jobintake.web.plist` — prepend
+   `/Users/deepeshz2/.local/share/fnm/aliases/default/bin` to the
+   `PATH` env var. Reload via `launchctl unload + load`.
+2. **api.py defense-in-depth** — `process_queue` now explicitly
+   computes `augmented_path = fnm_node + os.environ['PATH']` and
+   passes it as `env['PATH']` when calling
+   `asyncio.create_subprocess_exec`. Even if someone forgets to
+   update the plist, the subprocess always sees node.
+
+## 26.2 — Error filter + bulk-retry endpoint
+Added `error` to FilterBar status pills so user can filter and review
+errored rows. Each row's `last_change` cell carries the error reason
+verbatim — no log-grepping needed.
+
+New endpoint: `POST /api/jobs/retry-errored` (owner-only) bulk-resets
+every `status=error` row to `status=tailor`, clears `last_change` and
+`tailored_at`. Returns `{reset, job_ids}`. Owner can then click
+"Process queue" to re-run them.
+
+New component: `RetryErroredBanner` shows when the user has filtered
+to status=error AND there are errored rows. Amber banner with count +
+"Retry all" button. Hidden in viewer mode (button is owner-only).
+
+**Why not auto-retry on every error?** If the underlying cause
+persists (auth expired, port stuck, API rate limit), an auto-loop
+would burn Claude API budget reprocessing the same broken setup.
+Manual retry is the safe default — the user reads the error cause,
+fixes the root cause, then clicks Retry.
+
+## 26.3 — Smoke checklist
+- [x] Click "Errored" status pill → only error rows show + amber banner appears
+- [x] Click "Retry all" → bulk-reset succeeds, toast confirms count, list updates
+- [x] Open detail of errored row → `last_change` cell shows error message
+- [x] Per-row retry from drawer (Tailor button) still works
+- [x] webapp restart → fnm path persists across reboots (in plist)
+- [x] Processor triggered from webapp now finds node (no more bridge_error)
+
+---
+
 ## Out of scope (current)
 
 These are deliberate non-goals or deferred to v3 — see `vision.md` for

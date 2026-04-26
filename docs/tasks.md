@@ -794,6 +794,51 @@ job status". Cards come back on hard refresh.
 - [x] Card view ignores status filter pills (always shows status=new)
 - [x] Empty state when stack exhausts
 
+## 24.6 — Bugfix: detail drawer was showing UNDER the card stack
+**Caught from a screenshot:** opening a card detail drew the drawer
+visually below the still-visible card. Diagnosis: `SwipeCard` set inline
+`zIndex: 100 - stackIndex` (so 100/99/98) — way above the drawer's z-50,
+and above every other element on the page.
+
+**Fix (belt + suspenders):**
+- Wrap CardStack's relative card container with Tailwind `isolate`
+  class (CSS `isolation: isolate`) — creates a new stacking context so
+  inner z-indices never escape it.
+- Lower SwipeCard inline z-index from `100 - N` to `3 - N` — even
+  without isolation, these can't outrank the drawer.
+
+Drawer now correctly overlays cards on phone + desktop.
+
+---
+
+# Step 25 — Card view UX polish: lock status pills + auto-select "new"
+
+User feedback: when toggling to card view, the status pills still showed
+the user's manual selection (e.g. "Applied" highlighted) even though
+CardStack server-side overrode params to status=["new"] always. Confusing.
+
+## 25.1 — Auto-select "new" on view change
+- App.tsx's `handleViewChange("cards")` now force-sets
+  `filters.status = ["new"]` so the UI matches what the server is
+  actually showing.
+- Switching back to "list" leaves status as-is (no surprise reset).
+
+## 25.2 — Disable status pills in card view
+- FilterBar accepts `view` prop (already passed since step 24.3).
+- When `view === "cards"`:
+  - Pill row gets `opacity: 60%`, hover tooltip "Status is locked
+    to New in card view".
+  - All pills get `disabled` + `cursor-not-allowed`; no click handler
+    fires.
+  - "New" pill always renders as active; others stay neutral.
+
+## 25.3 — Smoke checklist
+- [x] Click cards toggle → "New" pill snaps active, others greyed
+- [x] Try to click "Applied" pill → no effect (cursor: not-allowed)
+- [x] Click list toggle → pills become interactive again, status stays
+  ["new"] (user can change normally)
+- [x] Other filters (resume-strong, target-city, search) stay usable in both views
+
 ---
 
 ## Out of scope (current)

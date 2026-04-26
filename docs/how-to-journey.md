@@ -380,6 +380,12 @@ vs layers icon):
 | **Skip** | ↑ up | amber ↑ | No DB write — card hides locally, returns on hard refresh |
 | **Open detail** | tap card | "Open" pill | Opens the JobDetail drawer |
 
+When you toggle to card view, the **status pills are auto-locked to
+"New"** (greyed out, non-clickable, tooltip explains). Card view is
+intentionally for first-touch triage of fresh inflow only — for
+already-tailored / applied / rejected rows, switch back to list view
+where every status filter is interactive.
+
 Drag-direction overlays appear at 40% threshold (TAILOR / REJECT / SKIP);
 card rotates ±15° with X movement; below threshold the card springs
 back. Stack of 3 cards visible (top draggable, others scaled behind for

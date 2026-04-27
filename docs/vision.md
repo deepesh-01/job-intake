@@ -6,6 +6,7 @@
 > - [`how-to-journey.md`](./how-to-journey.md) — operational guide
 > - [`tasks.md`](./tasks.md) — chronological build log
 > - [`decisions.md`](./decisions.md) — ADR log of non-obvious choices
+> - [`sources-roadmap.md`](./sources-roadmap.md) — funnel diversity audit + tiered plan to broaden sources
 > - [`job-intake-design-v1-original.md`](./job-intake-design-v1-original.md) — frozen v1 design
 
 ---

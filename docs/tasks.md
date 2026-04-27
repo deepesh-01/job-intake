@@ -7,6 +7,7 @@ sections; they're historical. Append new steps at the bottom.*
 > - [`vision.md`](./vision.md) — current state + 10x roadmap
 > - [`how-to-journey.md`](./how-to-journey.md) — operational guide
 > - [`decisions.md`](./decisions.md) — ADR log of non-obvious choices
+> - [`sources-roadmap.md`](./sources-roadmap.md) — funnel diversity audit + tiered plan to broaden sources
 > - [`job-intake-design-v1-original.md`](./job-intake-design-v1-original.md) — frozen v1 design
 
 ---

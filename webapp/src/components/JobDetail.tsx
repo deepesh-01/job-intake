@@ -16,7 +16,7 @@ import {
 import ReactMarkdown from "react-markdown"
 import { fetchJob, patchJob } from "@/lib/api"
 import { useAuth } from "@/lib/auth"
-import { cn, formatComp, formatRelativeDate } from "@/lib/utils"
+import { cn, formatComp, formatDateTime, formatDateTimeFull, formatRelativeDate } from "@/lib/utils"
 
 export function JobDetail({ id, onClose }: { id: string | null; onClose: () => void }) {
   const open = id !== null
@@ -140,9 +140,15 @@ function DetailContent({ id, onClose }: { id: string; onClose: () => void }) {
               <span className="font-medium">{compStr}</span>
             </div>
           )}
-          <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-muted/40">
+          <div
+            className="flex items-center gap-1 px-2 py-1 rounded-md bg-muted/40"
+            title={`Added ${formatDateTimeFull(job.discovered_at)}`}
+          >
             <Calendar className="size-3 text-muted-foreground" />
-            <span>{formatRelativeDate(job.discovered_at)}</span>
+            <span className="tabular-nums">
+              {formatDateTime(job.discovered_at)}
+              <span className="text-muted-foreground"> · {formatRelativeDate(job.discovered_at)}</span>
+            </span>
           </div>
           <a
             href={job.link}

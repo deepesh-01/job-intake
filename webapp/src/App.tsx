@@ -16,6 +16,7 @@ export function App() {
     excludeNonUsOnly: false,
     q: "",
     sort: "resume_match_desc",
+    discoveredWithin: "",
   })
   const [view, setView] = useState<ViewMode>("list")
   const [openId, setOpenId] = useState<string | null>(null)

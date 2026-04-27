@@ -31,6 +31,7 @@ export function CardStack({
       tags_all: tagsAll.length ? tagsAll : undefined,
       tags_none: filters.excludeNonUsOnly ? ["non_us_only"] : undefined,
       q: filters.q || undefined,
+      discovered_within: filters.discoveredWithin || undefined,
       sort: filters.sort,
       limit: 200,
     }

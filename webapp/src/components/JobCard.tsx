@@ -1,5 +1,5 @@
 import { type JobSummary } from "@/lib/api"
-import { cn, formatComp, formatRelativeDate } from "@/lib/utils"
+import { cn, formatComp, formatDateTime, formatDateTimeFull } from "@/lib/utils"
 import { CheckCircle2, MapPin, Sparkles, Wand2 } from "lucide-react"
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string; icon?: any }> = {
@@ -144,8 +144,11 @@ export function JobCard({ job, onClick }: { job: JobSummary; onClick: () => void
                 )
               })}
               <div className="grow" />
-              <span className="text-[10px] text-muted-foreground tabular-nums">
-                {formatRelativeDate(job.discovered_at)}
+              <span
+                className="text-[10px] text-muted-foreground tabular-nums whitespace-nowrap"
+                title={`Added ${formatDateTimeFull(job.discovered_at)}`}
+              >
+                {formatDateTime(job.discovered_at)}
               </span>
             </div>
           )}

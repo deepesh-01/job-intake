@@ -13,7 +13,7 @@ import {
 } from "lucide-react"
 import { useState } from "react"
 import { type JobSummary } from "@/lib/api"
-import { cn, formatComp, formatRelativeDate } from "@/lib/utils"
+import { cn, formatComp, formatDateTime, formatDateTimeFull } from "@/lib/utils"
 
 const SWIPE_DIST_THRESHOLD = 110
 const SWIPE_VEL_THRESHOLD = 600
@@ -201,9 +201,12 @@ export function SwipeCard({
             {compStr}
           </span>
         )}
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-muted/40 text-muted-foreground">
+        <span
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-muted/40 text-muted-foreground tabular-nums"
+          title={`Added ${formatDateTimeFull(job.discovered_at)}`}
+        >
           <Calendar className="size-3" />
-          {formatRelativeDate(job.discovered_at)}
+          {formatDateTime(job.discovered_at)}
         </span>
       </div>
 

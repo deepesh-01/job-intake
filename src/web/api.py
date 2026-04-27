@@ -283,11 +283,19 @@ def list_jobs(
     tags_all: str | None = Query(None, description="comma-separated tags ALL must match"),
     tags_none: str | None = Query(None, description="comma-separated tags NONE may match"),
     q: str | None = Query(None, description="text search across company/role/location/snippet"),
-    sort: str = Query("resume_match_desc", description="resume_match_desc | discovered_desc | comp_high_desc"),
+    discovered_within: str | None = Query(
+        None,
+        description="bucket on discovered_at: 24h | 7d | 30d | older",
+    ),
+    sort: str = Query(
+        "resume_match_desc",
+        description="resume_match_desc | discovered_desc | discovered_asc | comp_high_desc",
+    ),
     limit: int = Query(200, ge=1, le=2000),
     offset: int = Query(0, ge=0),
 ) -> JobsListResponse:
     import time as _time
+    from datetime import datetime, timedelta, timezone
 
     snap = _load_snapshot()
     rows = snap.rows
@@ -303,10 +311,35 @@ def list_jobs(
         rows = [r for r in rows if unwanted.isdisjoint(set(r.get("tags", [])))]
     if q:
         rows = [r for r in rows if _matches(r, q)]
+    if discovered_within:
+        bucket = discovered_within.strip().lower()
+        delta_map = {"24h": timedelta(hours=24), "7d": timedelta(days=7), "30d": timedelta(days=30)}
+        now_utc = datetime.now(timezone.utc)
+
+        def _parsed(r: dict) -> datetime | None:
+            raw = r.get("discovered_at")
+            if not raw:
+                return None
+            try:
+                # Treat naive timestamps as UTC (matches scout writes).
+                dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+                return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+            except (ValueError, TypeError):
+                return None
+
+        if bucket == "older":
+            cutoff = now_utc - timedelta(days=30)
+            rows = [r for r in rows if (dt := _parsed(r)) and dt < cutoff]
+        elif bucket in delta_map:
+            cutoff = now_utc - delta_map[bucket]
+            rows = [r for r in rows if (dt := _parsed(r)) and dt >= cutoff]
 
     # sort
     if sort == "discovered_desc":
         rows.sort(key=lambda r: r.get("discovered_at", ""), reverse=True)
+    elif sort == "discovered_asc":
+        # Empty timestamps go last regardless of direction.
+        rows.sort(key=lambda r: r.get("discovered_at") or "9999")
     elif sort == "comp_high_desc":
         rows.sort(key=lambda r: (r.get("comp_high_usd") or r.get("comp_high") or 0), reverse=True)
     else:

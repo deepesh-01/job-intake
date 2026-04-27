@@ -354,9 +354,13 @@ def _dedup_intra_batch(rows: list[EnrichedRow]) -> tuple[list[EnrichedRow], int]
 def _to_sheet_row(r: EnrichedRow) -> list[Any]:
     p = r.posting
     snippet = extract.jd_snippet(r.jd_text)
+    # Stamp discovery time at sheet-write so the user can see exactly when
+    # a row was added. Older rows in the sheet only have YYYY-MM-DD; the
+    # webapp's formatter handles both shapes.
+    discovered_iso = now_iso()
     return [
         p.id,
-        r.discovered_at.isoformat(),
+        discovered_iso,
         p.posted_at.isoformat() if p.posted_at else r.discovered_at.isoformat(),
         p.company,
         p.role,

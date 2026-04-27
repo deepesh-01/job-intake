@@ -97,6 +97,7 @@ export async function fetchJobs(params: {
   tags_all?: string[]
   tags_none?: string[]
   q?: string
+  discovered_within?: string
   sort?: string
   limit?: number
   offset?: number
@@ -106,6 +107,7 @@ export async function fetchJobs(params: {
   if (params.tags_all?.length) sp.set("tags_all", params.tags_all.join(","))
   if (params.tags_none?.length) sp.set("tags_none", params.tags_none.join(","))
   if (params.q) sp.set("q", params.q)
+  if (params.discovered_within) sp.set("discovered_within", params.discovered_within)
   if (params.sort) sp.set("sort", params.sort)
   if (params.limit) sp.set("limit", String(params.limit))
   if (params.offset) sp.set("offset", String(params.offset))

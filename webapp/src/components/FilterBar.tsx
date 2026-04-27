@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Layers, List, Search, SlidersHorizontal, X } from "lucide-react"
+import { ArrowUpDown, Layers, List, Search, SlidersHorizontal, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { motion, AnimatePresence } from "framer-motion"
 
@@ -12,6 +12,7 @@ export interface Filters {
   excludeNonUsOnly: boolean
   q: string
   sort: string
+  discoveredWithin: string  // "" | "24h" | "7d" | "30d" | "older"
 }
 
 const STATUS_OPTIONS = [
@@ -26,8 +27,17 @@ const STATUS_OPTIONS = [
 
 const SORT_OPTIONS = [
   { value: "resume_match_desc", label: "Best match" },
-  { value: "discovered_desc", label: "Newest" },
+  { value: "discovered_desc", label: "Newest first" },
+  { value: "discovered_asc", label: "Oldest first" },
   { value: "comp_high_desc", label: "Highest comp" },
+]
+
+const DATE_OPTIONS = [
+  { value: "", label: "Any time" },
+  { value: "24h", label: "Last 24h" },
+  { value: "7d", label: "Last 7d" },
+  { value: "30d", label: "Last 30d" },
+  { value: "older", label: "Older" },
 ]
 
 export function FilterBar({
@@ -92,6 +102,21 @@ export function FilterBar({
             )
           })}
           <div className="grow" />
+          {/* Sort — always visible so it's discoverable. */}
+          <div className="shrink-0 relative">
+            <ArrowUpDown className="size-3 text-muted-foreground absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <select
+              value={value.sort}
+              onChange={(e) => onChange({ ...value, sort: e.target.value })}
+              aria-label="Sort"
+              title="Sort"
+              className="h-8 pl-7 pr-2 text-xs bg-muted/40 border border-transparent focus:border-ring rounded-full outline-none appearance-none cursor-pointer hover:bg-muted/60 transition-colors"
+            >
+              {SORT_OPTIONS.map((s) => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
+            </select>
+          </div>
           {/* List vs Card view toggle — segmented control */}
           <div className="shrink-0 inline-flex items-center bg-muted/40 rounded-full p-0.5">
             <button
@@ -163,32 +188,46 @@ export function FilterBar({
               transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
               className="overflow-hidden"
             >
-              <div className="flex flex-wrap items-center gap-2 pt-1">
-                <ToggleChip
-                  active={value.resumeStrong}
-                  onClick={() => onChange({ ...value, resumeStrong: !value.resumeStrong })}
-                  label="Resume-strong"
-                />
-                <ToggleChip
-                  active={value.targetCity}
-                  onClick={() => onChange({ ...value, targetCity: !value.targetCity })}
-                  label="Target city"
-                />
-                <ToggleChip
-                  active={value.excludeNonUsOnly}
-                  onClick={() => onChange({ ...value, excludeNonUsOnly: !value.excludeNonUsOnly })}
-                  label="Hide US-only"
-                />
-                <div className="grow" />
-                <select
-                  value={value.sort}
-                  onChange={(e) => onChange({ ...value, sort: e.target.value })}
-                  className="h-8 text-xs bg-muted/40 border border-transparent focus:border-ring rounded-lg px-2 outline-none"
-                >
-                  {SORT_OPTIONS.map((s) => (
-                    <option key={s.value} value={s.value}>{s.label}</option>
-                  ))}
-                </select>
+              <div className="space-y-2 pt-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <ToggleChip
+                    active={value.resumeStrong}
+                    onClick={() => onChange({ ...value, resumeStrong: !value.resumeStrong })}
+                    label="Resume-strong"
+                  />
+                  <ToggleChip
+                    active={value.targetCity}
+                    onClick={() => onChange({ ...value, targetCity: !value.targetCity })}
+                    label="Target city"
+                  />
+                  <ToggleChip
+                    active={value.excludeNonUsOnly}
+                    onClick={() => onChange({ ...value, excludeNonUsOnly: !value.excludeNonUsOnly })}
+                    label="Hide US-only"
+                  />
+                </div>
+                <div className="flex items-center gap-1.5 overflow-x-auto -mx-1 px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  <span className="shrink-0 text-[10px] uppercase tracking-wider text-muted-foreground/70 pr-1">
+                    Added
+                  </span>
+                  {DATE_OPTIONS.map((opt) => {
+                    const active = value.discoveredWithin === opt.value
+                    return (
+                      <button
+                        key={opt.value || "any"}
+                        onClick={() => onChange({ ...value, discoveredWithin: opt.value })}
+                        className={cn(
+                          "shrink-0 px-2.5 h-7 rounded-full text-[11px] font-medium border transition-all active:scale-95",
+                          active
+                            ? "bg-primary/15 text-primary border-primary/30"
+                            : "bg-transparent text-muted-foreground border-border hover:text-foreground",
+                        )}
+                      >
+                        {opt.label}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
             </motion.div>
           )}

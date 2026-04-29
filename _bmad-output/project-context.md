@@ -124,7 +124,10 @@ _Critical rules and patterns AI agents must follow when implementing code in `re
 - **Workday quirks**: `limit > 20` returns 400. Custom UAs get blocked — use the Chrome UA. List responses can be <200 chars; bypass the small-response check.
 - **LinkedIn unauth endpoint is rate-limited** at ~50 reqs/run. Cap at `MAX_POSTINGS_PER_BOARD = 25`. The `_throttle()` helper in `src/scout/sources/_http.py` is mandatory.
 - **Greenhouse double-encodes HTML** — `html.unescape()` before parsing with selectolax.
-- **System A bridge** (`src/tailor_bridge.py`) calls `~/Documents/resume-builder/dist/cli-tailor.js` as a subprocess. **`cwd=system_a_path`** is required so dotenv can find System A's `.env`.
+- **System A bridge** (`src/tailor_bridge.py`) calls **two** System A CLIs as subprocesses, with `cwd=system_a_path` required so dotenv finds System A's `.env`:
+  - `dist/cli-tailor.js` — fresh tailor (`run_tailor()`)
+  - `dist/cli-edit.js` — iterate on existing tailored resume via prior session (`run_edit()`); contract documented in ADR-026 here + ADR-032 in resume-builder.
+- **Source-auth env vars** (in `.env`, gitignored): `LI_AT_COOKIE` (LinkedIn, ~365d), `NAUKRI_COOKIE` (Naukri optional Bearer), `INSTAHYRE_COOKIE` (Instahyre optional `sessionid`), `HIRIST_COOKIES` (Hirist required full Cookie header, ~30d JWT). Refresh by re-logging-in when 401/403 fires.
 - **Never commit `.env`, `data/oauth_token.json`, or anything matching `*.json`** — the gitignore is broad on JSON precisely because of stray credential files.
 - **Memory of session token**: a leaked PAT (`ghp_B0Wp7w...`) was committed historically and is in old `.claude/projects/.../*.jsonl` transcripts. **Rotate on https://github.com/settings/tokens** if not done.
 - The webapp's `webapp/dist/` is gitignored — the FastAPI SPA fallback reads from disk; a fresh clone needs `npm run build` before the webapp serves anything.

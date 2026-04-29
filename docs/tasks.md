@@ -1045,6 +1045,150 @@ breadcrumb, not source state. Ignored.
 
 ---
 
+# Step 29 — India-pivot expansion (Instahyre + Hirist sources, exclude calibration, source-label UX)
+
+## 29.1 — `src/scout/sources/instahyre.py` (cookie-optional, okhttp UA bypass)
+- **WORKING (verified 2026-04-29) without auth.** The handoff doc had guessed
+  cookies were required; turned out wrong. The public REST endpoint
+  `/api/v1/job_search/` returns clean JSON for `User-Agent: okhttp/4.12.0`
+  even when called unauth — Cloudflare's BM rule on this path whitelists
+  mobile UAs. `INSTAHYRE_COOKIE` env is read and sent as `sessionid` if
+  set, but the unauth global feed is sufficient.
+- 35 jobs/page, paginates via `?limit=35&offset=N`, sorted descending by id
+  (= freshness). `total_count` corpus ~13.6k. Filter params (`q=`,
+  `locations=`, `experience_min/max=`) silently ignored on unauth — the
+  feed is the global pool, filtered downstream by exclude + resume_match
+  (same model as `hn_hiring` / `yc_waas`). Auth may unlock filtering;
+  not verified yet.
+- Field availability: id, title, company_name, locations, keywords[],
+  public_url. **No comp / no posted_at / no JD body** in either list or
+  detail endpoint. Title + keywords drive tags; `instahyre` added to the
+  JD-length-skip exemption set in `runner._enrich_one`.
+- Boards: 1 broad `instahyre_feed` (`pages=5` = 175 jobs/run) enabled; 7
+  keyword-targeted boards staged disabled until cookie auth proves to
+  unlock filtering.
+
+## 29.2 — `src/scout/sources/hirist.py` (cookie-required, JWT)
+- **WORKING (verified 2026-04-29) with auth required.** Hirist (rebranded
+  hirist.com → hirist.tech) is fully auth-walled. Naukri-style okhttp UA
+  bypass does NOT work here — the auth gate is enforced at the application
+  layer regardless of UA. Architecture: Next.js 8.1.0 frontend, LoopBack
+  API at `gladiator.hirist.tech`. The LoopBack OpenAPI spec is **publicly
+  readable** at `/explorer/openapi.json` (made recon trivial).
+- Working endpoint: `GET /job/jobfeed`. Returns the user's personalized
+  feed (server-side ranked to profile skills/experience). 50 jobs/page;
+  paginates via `?page=N`. Filter params (kw/loc/exp) silently ignored —
+  only `pages` matters.
+- Auth: `HIRIST_COOKIES` env var contains the entire `Cookie` header value
+  from a logged-in browser session. Required cookies: `HIRIST_CK1` +
+  `hirist_seeker_enc` (both contain the same JWT) + `PHPSESSID`. JWT
+  expires ~30 days; refresh by re-logging-in.
+- Fields: id, title, introText (HTML JD body), min/max years, minSal/maxSal
+  (lakhs INR with hideSal flag — ~10% show comp), createdTimeMs (100%
+  coverage), tags (skills array), locations, companyData.companyName,
+  workFromHome flag. Public job URL: `https://www.hirist.tech/j/<id>`.
+- **Quality: highest in the funnel.** First scout-run yield: 106 of 150
+  fetched rows landed in queue (44 dropped by exclude/dedup); 103/106
+  tagged `resume_strong` (97% strong-match rate), 104/106 `target_city`,
+  98/106 `remote_ok`, 61/106 `seniority_match`, only 1/106
+  `wrong_discipline` — vs Instahyre's 45% strong-match / 14%
+  wrong-discipline. Comp visibility 10% (visible ones at ₹60-80 LPA, well
+  above ₹40L floor).
+- Both sources added to `INDIA_FOCUSED_SOURCES` in `src/scout/location.py`
+  and registered in `runner._SOURCE_MODULES` + `verify_boards._SOURCE_MODULES`.
+
+## 29.3 — `exclude.yaml` Round 4 + Round 5 (strict pass)
+- **Round 4 (post-Instahyre audit)** — promoted `wrong_discipline` from
+  tag-only to drop. Patterns added: `\bdata\s+engineer\b`,
+  `\b(?:machine\s+learning|ml)\b[\w\s]{0,30}\bengineer\b` (Round-5 broadened
+  form catches "ML Application Engineer"),
+  `\bdevops\s+(engineer|platform|specialist|architect|lead)\b`,
+  `\bcloud\s+devops\b`, `\bqa\s+(engineer|automation)\b`, `\bsdet\b`. Plus
+  6 confirmed-safe out-of-domain (customer support exec / optometrist /
+  treasury solutions / counsellor / BDA / VAPT) and broader patterns for
+  Director-of-Product, Corporate Engineering, IDR Maintenance, Finance and
+  Account, CMS Specialist, Product Analyst.
+- **Round 5 (post-Hirist audit)** — body-shop / staffing-firm cleanup.
+  ~27% of Hirist's queue was anonymized-client-fronting consultancies
+  (Sigma Allied, Vintronics, NETSYSCON, etc.). Two-tier fix:
+  - Tier 1 patterns (`excluded_company_patterns`):
+    `\bhr\s+(consulting|solutions|consultancy)\b`,
+    `\btalent\s+(forge|partners|connect|search|hunt)\b`,
+    `\b(staffing|placement|manpower|workforce)\b`, `\bconsulting\s+llp\b`,
+    `\bglobal consultancy\b`, `\bpeople\s+(consulting|solutions)\b`.
+  - Tier 2 (curated `excluded_companies` list): 24 specific body-shop
+    names. Triaged carefully — kept legit product cos like HealthEdge,
+    Agoda, QuEST, Accion Labs, Nineleaps, InfoCepts, Draup explicitly OUT
+    of the blocklist despite similar-sounding names.
+- **Junior-tech roles** added: `\bjunior\s+(?:\.net|java|python|node|...|developer|engineer|...)\b`
+  catches "Junior .Net Developer - C#/WebForms". Existing
+  `intern/trainee/fresher` rules didn't catch "Junior <stack>".
+- **Retroactive trim (`scripts/sheet_role_filter.py --apply`)**:
+  - After Round 4: 226 → 190 (36 trimmed; 34/36 Instahyre)
+  - After Round 5: 220 → 192 (28 more trimmed; mostly Hirist body-shops)
+  - Cumulative: 64 rows moved to `status=skip` with marker
+    `exclude_rules_bulk_trim_2026-04-29`. Hirist queue: 106 → 78 (97%
+    of remaining is `resume_strong`).
+
+## 29.4 — Webapp: source-label badge on every tile
+- Previously the queue showed `company / role / location` with no
+  indication of which source produced the row, making it hard to
+  anticipate data quality before opening the drawer.
+- Added `webapp/src/lib/sources.ts` — single source of truth for the
+  prefix→label mapping (used by both `JobCard` list view and `SwipeCard`
+  triage view). `linkedin` and `linkedin_auth` both display as "LinkedIn";
+  `hn_hiring` → "HN", `yc_waas` → "YC".
+- `JobCard`: small uppercase pill between company name and location.
+- `SwipeCard`: pill in the meta row alongside location/comp/date.
+
+## 29.5 — Webapp: drawer back-button intercept
+- Opening a job detail drawer (vaul `Drawer.Root`) and pressing the system
+  back button (Android browser, PWA installed app) closed the entire SPA
+  instead of just the drawer — no synthetic history entry was being pushed.
+- Fix in `webapp/src/components/JobDetail.tsx`: new `useBackButtonClose`
+  hook. When `open=true`, pushes `history.pushState({drawerOpen: true},
+  "")` and listens for `popstate` to call `onClose`. Cleanup tracks whether
+  close was popstate-triggered; if not (X click / overlay tap / swipe),
+  `history.back()` pops the synthetic entry so phantom entries don't
+  accumulate across open/close cycles.
+- Tested across all close paths (X icon, overlay, swipe, system back).
+
+## 29.7 — Re-tailor with feedback (cross-repo iterate flow, ADR-026 + ADR-032)
+- The Re-tailor button on `ready` / `applied` rows opens a modal with
+  4 reason categories (`layout`, `shallow_detailing`, `drifting_from_jd`,
+  `other` — free text required when `other`).
+- Backend `POST /api/jobs/{id}/retailor` accepts `{reason, details, iterate}`.
+  Writes a sidecar `data/jds_retailor/<safe>.json` (`{reason, details,
+  iterate, instruction, queued_at}`) AND a feedback-wrapped JD
+  `<safe>.md`. Flips the row to `tailor`, clears `resume_path`, stamps
+  `filter_updated_at`, and stores a one-line audit summary in `last_change`.
+- Processor reads the sidecar; if `iterate=true` calls `run_edit()`
+  (System A's new `cli-edit.js`), otherwise `run_tailor()` against the
+  wrapper. Both files are consumed on success, left for retry on failure.
+  On `EDIT_NO_PRIOR_JOB` the processor falls back automatically to fresh
+  tailor with the wrapper.
+- **Cross-repo:** added `dist/cli-edit.js` to resume-builder (System A,
+  ADR-032 there). Args: `--job-slug <slug> --instruction <text>
+  [--output-dir PATH] --output-format json`. Resumes the prior Claude
+  session via `runEdit()` and emits the same JSON shape as `cli-tailor.js`.
+- Webapp dialog has a checkbox **"Iterate on existing tailored resume"**
+  (default ON) and **"Remember my choice"** (localStorage keys
+  `job_intake_retailor_iterate` + `job_intake_retailor_iterate_remember`).
+- Documentation in sync on both sides: ADR-026 here + ADR-032 in
+  resume-builder; CLAUDE.md and `_bmad-output/project-context.md` in this
+  repo updated to list both CLIs as the cross-system contract.
+
+## 29.6 — Cookie env vars (now four sources need creds)
+- `LI_AT_COOKIE` (LinkedIn auth, ~365-day expiry)
+- `NAUKRI_COOKIE` (Naukri optional, sent as Bearer for personalized results)
+- `INSTAHYRE_COOKIE` (Instahyre optional, sent as `sessionid`)
+- `HIRIST_COOKIES` (Hirist required, full Cookie header value, ~30-day expiry)
+- All in gitignored `.env`. Launchd plists run with `WorkingDirectory`
+  pointing at the project root, so `python-dotenv` picks them up
+  automatically — no plist changes needed when adding new envs.
+
+---
+
 ## Out of scope (current)
 
 These are deliberate non-goals or deferred to v3 — see `vision.md` for

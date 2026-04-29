@@ -13,6 +13,7 @@ import {
 } from "lucide-react"
 import { useState } from "react"
 import { type JobSummary } from "@/lib/api"
+import { sourceFromId } from "@/lib/sources"
 import { cn, formatComp, formatDateTime, formatDateTimeFull } from "@/lib/utils"
 
 const SWIPE_DIST_THRESHOLD = 110
@@ -190,6 +191,9 @@ export function SwipeCard({
 
       {/* Meta row */}
       <div className="flex flex-wrap items-center gap-1.5 text-[11px] mb-3">
+        <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-muted/40 text-muted-foreground uppercase tracking-wide text-[10px] font-medium">
+          {sourceFromId(job.id)}
+        </span>
         {job.location && (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-muted/40">
             <MapPin className="size-3" />

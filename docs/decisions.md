@@ -525,3 +525,206 @@ uv, no npm) with `make docs-check` / `make docs-sync` targets that map
 caught. Mirrors resume-builder's exact UX so a contributor (or future-
 self after a long pause) doesn't have to remember which repo uses which
 command — both projects use the same `check`/`sync` verbs.
+
+---
+
+## ADR-024 · Webapp-spawned subprocesses must detach (`start_new_session=True`)
+**Date:** 2026-04-29 · **Status:** Accepted
+
+**Context.** Caught two related stalls today, both root-caused to the same
+bug:
+
+1. **Surveymonkey re-tailor** (Naukri row, processor run mid-afternoon).
+   I rebuilt the webapp + ran `launchctl kickstart -k web`. Uvicorn got
+   SIGTERM; its child processor (spawned via `asyncio.create_subprocess_exec`
+   without `start_new_session=True`) inherited the SIGTERM and died
+   mid-critic. The row stayed in `tailor` with a stale lock; `cli_tailor_done`
+   was logged but `cli_refine_done` never followed. User restarted the
+   processor manually and the same row was re-tailored from scratch
+   (~$0.55 second-run cost).
+2. **Unloadbox stall** (Hirist row, evening run). Same symptom: I rebuilt
+   the webapp again to ship the apply-copilot button, uvicorn restarted,
+   processor died mid-refine, lock file orphaned at 29 min (just under
+   the 60-min `_LOCK_ORPHAN_SECONDS` threshold so future processor runs
+   wouldn't pick it up either). Required manual lock removal + a
+   from-CLI processor relaunch to recover.
+
+**Decision.** Every long-running subprocess spawned from the webapp
+process passes `start_new_session=True` (POSIX) so the child becomes
+its own session leader and is NOT in uvicorn's process group. SIGTERM to
+uvicorn no longer propagates to the child.
+
+Applied at:
+- `src/web/api.py::process_queue` (the `/api/process` endpoint that
+  spawns `python -m processor.runner`)
+- `src/web/api.py::copilot_start` (the apply co-pilot Playwright
+  launcher; this one had it from the start)
+
+**Reasoning.**
+- The webapp will restart often during development (every webapp build,
+  every `launchctl kickstart`). The processor and the apply-copilot
+  Chromium each take 5–15 minutes to complete. Coupling their lifetime
+  to the webapp's is wrong.
+- `start_new_session=True` is the standard POSIX idiom for "detached
+  daemon-style child" — same flag the existing `tailor_bridge.py` uses
+  to launch System A's CLI.
+- We could instead route long jobs through a dedicated launchd service,
+  but that's over-engineering for a single-user laptop tool.
+
+**Trade-offs accepted.**
+- A truly stuck processor child can no longer be cleaned up by killing
+  uvicorn. That's the right outcome — explicit `kill <pid>` against the
+  detached process is the cleanup path, and the active-locks display in
+  `/api/process/status` surfaces the PID to the user.
+- The 60-min `_LOCK_ORPHAN_SECONDS` window in `processor/runner.py`
+  remains as the secondary safeguard for genuinely orphaned locks (e.g.
+  a force-killed processor that didn't unlink its own lock).
+
+**Consequence.** Webapp builds + reloads no longer cost dollars in
+re-tailored rows. Future webapp restarts are now safe at any time. The
+`start_new_session=True` flag is now a project rule — anyone adding a
+new long-running endpoint that spawns a subprocess MUST include it
+(documented in `_bmad-output/project-context.md`).
+
+---
+
+## ADR-025 · Tailored-resume link is state-aware: Drive URL vs. local path
+**Date:** 2026-04-29 · **Status:** Accepted
+
+**Context.** A LinkedIn row from 2026-04-27 (`linkedin:ALL:4404259896`,
+WaferWire) had its Drive upload silently fail at tailor time — the
+processor caught the exception, logged a warning, and fell back to
+storing the *local* PDF path in the sheet's `resume_path` cell
+(`/Users/deepeshz2/Documents/ready-to-apply/data/tailored/linkedin_ALL_4404259896.pdf`).
+Today, when the user clicked the "Tailored resume" link in the JobDetail
+drawer, the SPA rendered `<a href="/Users/deepeshz2/...">` — which the
+browser interpreted as a same-origin path, fetched
+`https://takejob.deepesh-engg.in/Users/deepeshz2/...`, hit the SPA's
+catch-all fallback, and rendered the index.html — looking like "the link
+took me back to home."
+
+**Decision.** The `resume_path` cell is no longer a polymorphic string.
+The webapp checks the prefix and renders one of three states:
+
+| `resume_path` | UI |
+|---|---|
+| starts with `http(s)://` | clickable green pill, opens in new tab |
+| non-http path *and* the file still exists on disk | amber "Re-upload to Drive" button calling `POST /api/jobs/{id}/resume/reupload` |
+| non-http path *and* file missing | amber "Re-tailor required — local PDF gone" warning, no link |
+
+The new `/api/jobs/{id}/resume/reupload` endpoint:
+- 400 if `resume_path` is already an http URL ("nothing to reupload")
+- 404 if `resume_path` is empty or the local file doesn't exist
+- On success: uploads the existing PDF via the same `DriveClient.upload_pdf`
+  the processor uses, then patches the sheet's `resume_path` cell + stamps
+  `filter_updated_at`. Returns the new Drive URL.
+
+The detail-row API (`GET /api/jobs/{id}`) gains a `local_pdf_exists: bool`
+field, computed only when `resume_path` is non-http. Lets the frontend
+choose the right of the two non-http states without a second round-trip.
+
+**Reasoning.**
+- The naive `href={resume_path}` opened a same-origin XHR-style fetch
+  that the SPA's catch-all silently caught. This was confusing UX
+  ("link goes to home") and lost user intent.
+- Re-uploading the existing PDF is *much* cheaper than re-tailoring:
+  Drive upload is free, re-tailor is ~$0.40 of Claude credits.
+- The "Re-tailor required" branch is reserved for the rare case where
+  both the Drive upload AND the local PDF are gone — usually means the
+  user pruned the `data/tailored/` cache and the row pre-dates the v3
+  Drive-fix.
+
+**Trade-offs accepted.**
+- The frontend now does a per-row file-existence check. Adds ~ms to
+  the JobDetail fetch (single `Path.is_file()` call, no I/O blocking
+  the snapshot cache). Acceptable.
+- We don't auto-reupload on tailor-error retry (yet). User must explicitly
+  click "Re-upload to Drive" — keeps the action visible + auditable.
+
+**Consequence.** Drive-upload-failed rows are now self-healing in one
+click instead of requiring a $0.40 re-tailor. The same UI pattern can
+be reused if/when other transient upload failures surface (e.g., S3 for
+JD bodies).
+
+---
+
+## ADR-026 · Re-tailor with feedback — iterate on existing vs fresh from base
+**Date:** 2026-04-29 · **Status:** Accepted
+
+**Context.** Reviewer signal was missing from the tailoring loop. When
+the user looked at a tailored resume in the queue and felt it was off
+("layout's wrong", "bullets are shallow", "drifting from the JD"), the
+only available action was the disabled `Re-tailor` button or a manual
+status flip — and a fresh tailor against the same JD just regenerated
+similar output, since the LLM had no idea WHY the previous attempt
+was rejected.
+
+System A (resume-builder) already exposes a `runEdit()` primitive in
+`src/claude.ts` that resumes the prior Claude session via
+`claude --resume <sessionId> -p <instruction> --allowedTools Read,Edit,Write`.
+This is the right mechanism — it lets the LLM iterate on the existing
+`resume.md` rather than regenerating from scratch. **But** that primitive
+was only wired up to a Telegram `/edit` command (`runEditFlow`); there
+was no CLI exposing it for cross-repo callers.
+
+**Decision.** Two coordinated changes across both repos:
+
+1. **System A (resume-builder) ships a new CLI**: `dist/cli-edit.js` —
+   args `--job-slug <slug> --instruction <text> [--output-dir <path>]
+   --output-format json`. Looks up the most recent matching job in System
+   A's SQLite DB by job_id slug-suffix (`%_<slug>`), validates
+   `workspace_path` + `session_id` are present, calls `runEdit()`,
+   re-renders the PDF, returns the same JSON shape as `cli-tailor.js`.
+   Specific error code `EDIT_NO_PRIOR_JOB` when no prior tailor exists.
+   See ADR-032 in resume-builder/docs/decisions.md.
+
+2. **System B (this repo) wraps the choice**:
+   - `POST /api/jobs/{id}/retailor` accepts `{ reason, details, iterate }`.
+   - Writes a sidecar JSON `data/jds_retailor/<safe>.json` with
+     `{reason, details, iterate, instruction, queued_at}` AND a feedback-
+     wrapped JD `data/jds_retailor/<safe>.md` (used only on the
+     non-iterate path or as the fallback when cli-edit returns
+     `EDIT_NO_PRIOR_JOB`).
+   - Processor reads the sidecar; calls `run_edit()` if `iterate=true`,
+     `run_tailor()` against the wrapper otherwise. Both files are
+     consumed (deleted) on success; left in place on failure for retry.
+   - Webapp's re-tailor dialog has a checkbox **"Iterate on existing
+     tailored resume"** (default ON) plus **"Remember my choice"**
+     (localStorage). The four reason categories — `layout`,
+     `shallow_detailing`, `drifting_from_jd`, `other` — are passed verbatim
+     to the LLM as the instruction.
+
+**Reasoning.**
+- True iteration (resume the session) yields strictly better quality
+  than re-tailoring from base — the LLM keeps the parts that worked and
+  edits along the feedback dimension.
+- The fallback exists for cases where the prior workspace has been
+  archived (System A's archiveCron) or where the row was never tailored
+  (status flip from `new` straight to `tailor` — shouldn't happen but
+  the path is robust). On `EDIT_NO_PRIOR_JOB`, the processor falls back
+  cleanly, no human intervention needed.
+- A small new CLI in System A is cheaper than introducing a Telegram-
+  message-based remote call, and reuses the existing battle-tested
+  `runEdit()` code path.
+- The instruction string is built server-side (not on the client) so the
+  feedback's prompt-engineering is consistent and version-controlled.
+
+**Trade-offs accepted.**
+- Two parallel files (`<safe>.md` for fresh-mode + `<safe>.json` sidecar)
+  carry the same feedback redundantly. Cleaner would be a single file
+  with mode-aware processor logic, but the .md wrapper is also readable
+  by humans (debugging) and the sidecar is JSON for machine parsing.
+- The slug match is `LIKE '%_<slug>'`. Theoretical risk: two jobs with
+  the same slug-suffix ever collide. In practice impossible — System B's
+  job_ids are source-prefixed (`naukri:ALL:<id>`, `instahyre:ALL:<id>`),
+  so the slug includes the source.
+- We don't expose iterate/remember as a per-row preference — it's a
+  session-wide preference. Acceptable: the choice is "what makes a good
+  re-tailor pipeline for me," not a per-job decision.
+
+**Consequence.** Re-tailor is now a real review loop. The user picks
+a reason (or types one) → we resume the Claude session with that
+instruction → the resume gets edited specifically along that dimension.
+This is the foundation for the "review process" the user explicitly
+flagged as essential. Cross-repo: System B knows the cli-edit.js
+contract; System A's ADR-032 documents the same contract from its side.

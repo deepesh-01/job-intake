@@ -1,11 +1,16 @@
+import { useEffect, useRef, useState } from "react"
 import { Drawer } from "vaul"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
+  AlertTriangle,
   CheckCircle2,
+  CloudUpload,
   ExternalLink,
   FileText,
+  Loader2,
   MapPin,
+  Rocket,
   Wand2,
   X,
   XCircle,
@@ -14,12 +19,14 @@ import {
   Building2,
 } from "lucide-react"
 import ReactMarkdown from "react-markdown"
-import { fetchJob, patchJob } from "@/lib/api"
+import * as Dialog from "@radix-ui/react-dialog"
+import { fetchJob, patchJob, retailorWithFeedback, reuploadResume, startCopilot, type JobDetail as JobDetailRow, type RetailorReason } from "@/lib/api"
 import { useAuth } from "@/lib/auth"
 import { cn, formatComp, formatDateTime, formatDateTimeFull, formatRelativeDate } from "@/lib/utils"
 
 export function JobDetail({ id, onClose }: { id: string | null; onClose: () => void }) {
   const open = id !== null
+  useBackButtonClose(open, onClose)
 
   return (
     <Drawer.Root
@@ -51,9 +58,32 @@ export function JobDetail({ id, onClose }: { id: string | null; onClose: () => v
   )
 }
 
+function useBackButtonClose(open: boolean, onClose: () => void) {
+  // Without a synthetic history entry, the system/browser back button has
+  // nowhere to go inside the SPA and exits the app. Push an entry on open
+  // so back closes the drawer; pop it when the drawer closes any other way
+  // (X, overlay, swipe) to avoid leaving phantom entries in history.
+  const closedByPopstate = useRef(false)
+  useEffect(() => {
+    if (!open) return
+    closedByPopstate.current = false
+    window.history.pushState({ drawerOpen: true }, "")
+    const onPop = () => {
+      closedByPopstate.current = true
+      onClose()
+    }
+    window.addEventListener("popstate", onPop)
+    return () => {
+      window.removeEventListener("popstate", onPop)
+      if (!closedByPopstate.current) window.history.back()
+    }
+  }, [open, onClose])
+}
+
 function DetailContent({ id, onClose }: { id: string; onClose: () => void }) {
   const qc = useQueryClient()
   const { canMutate } = useAuth()
+  const [retailorOpen, setRetailorOpen] = useState(false)
   const { data: job, isLoading, isError } = useQuery({
     queryKey: ["job", id],
     queryFn: () => fetchJob(id),
@@ -189,28 +219,12 @@ function DetailContent({ id, onClose }: { id: string; onClose: () => void }) {
           </div>
         )}
 
-        {/* Resume link if ready */}
-        {job.resume_path && (
-          <a
-            href={job.resume_path.startsWith("http") ? job.resume_path : "#"}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => {
-              if (!job.resume_path?.startsWith("http")) {
-                e.preventDefault()
-                navigator.clipboard?.writeText(job.resume_path || "")
-                toast.success("Local path copied to clipboard")
-              }
-            }}
-            className="mt-3 flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/15 text-emerald-500 transition-colors text-xs font-medium"
-          >
-            <span className="flex items-center gap-2">
-              <FileText className="size-4" />
-              Tailored resume
-            </span>
-            <ArrowUpRight className="size-4" />
-          </a>
-        )}
+        {/* Resume link — three states based on resume_path + local_pdf_exists:
+            (1) http URL    → green pill, opens Drive in new tab
+            (2) local + file present → amber "Re-upload to Drive" button
+            (3) local + file missing → amber warning, re-tailor required
+            See ADR-025 for context. */}
+        <ResumeLink job={job} canMutate={canMutate} />
       </div>
 
       {/* Scrollable JD body */}
@@ -268,30 +282,66 @@ function DetailContent({ id, onClose }: { id: string; onClose: () => void }) {
             Preview mode — owner only
           </div>
         )}
-        <div className="flex items-center gap-2">
-          <ActionButton
-            kind="primary"
-            disabled={!canMutate || mut.isPending || job.status === "tailor" || job.status === "ready"}
-            onClick={() => setStatus("tailor", "Queued for tailoring")}
-            icon={Wand2}
-            label={job.status === "ready" ? "Re-tailor" : "Tailor"}
-          />
-          <ActionButton
-            kind="success"
-            disabled={!canMutate || mut.isPending || job.status === "applied"}
-            onClick={() => setStatus("applied", "Marked as applied")}
-            icon={CheckCircle2}
-            label="Applied"
-          />
-          <ActionButton
-            kind="destructive"
-            disabled={!canMutate || mut.isPending || job.status === "rejected"}
-            onClick={() => setStatus("rejected", "Marked as rejected")}
-            icon={XCircle}
-            label="Reject"
-          />
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <ActionButton
+              kind="primary"
+              disabled={!canMutate || mut.isPending || job.status === "tailor"}
+              onClick={() => {
+                if (job.status === "ready" || job.status === "applied") {
+                  setRetailorOpen(true)
+                } else {
+                  setStatus("tailor", "Queued for tailoring")
+                }
+              }}
+              icon={Wand2}
+              label={job.status === "ready" || job.status === "applied" ? "Re-tailor" : "Tailor"}
+            />
+            <ActionButton
+              kind="success"
+              disabled={!canMutate || mut.isPending || job.status === "applied"}
+              onClick={() => setStatus("applied", "Marked as applied")}
+              icon={CheckCircle2}
+              label="Applied"
+            />
+            <ActionButton
+              kind="destructive"
+              disabled={!canMutate || mut.isPending || job.status === "rejected"}
+              onClick={() => setStatus("rejected", "Marked as rejected")}
+              icon={XCircle}
+              label="Reject"
+            />
+          </div>
+          {job.status === "ready" && job.link?.includes("linkedin.com") && (
+            <button
+              disabled={!canMutate}
+              onClick={() => {
+                startCopilot(job.id)
+                  .then(() => toast.success("Co-pilot launching — Chromium window opens shortly"))
+                  .catch((err: Error) => toast.error(err.message))
+              }}
+              className={cn(
+                "w-full h-10 px-4 rounded-xl text-sm font-medium",
+                "bg-primary text-primary-foreground hover:bg-primary/90",
+                "disabled:opacity-50 disabled:cursor-not-allowed",
+                "flex items-center justify-center gap-2 transition-colors",
+              )}
+            >
+              <Rocket className="size-4" />
+              Apply with co-pilot
+            </button>
+          )}
         </div>
       </div>
+      <RetailorDialog
+        open={retailorOpen}
+        onOpenChange={setRetailorOpen}
+        jobId={job.id}
+        onQueued={() => {
+          qc.invalidateQueries({ queryKey: ["jobs"] })
+          qc.invalidateQueries({ queryKey: ["job", job.id] })
+        }}
+      />
     </>
   )
 }
@@ -362,6 +412,257 @@ function DetailSkeleton({ onClose }: { onClose: () => void }) {
       <div className="h-4 bg-muted/40 rounded animate-pulse" />
       <div className="h-4 bg-muted/40 rounded animate-pulse w-5/6" />
       <div className="h-4 bg-muted/40 rounded animate-pulse w-4/6" />
+    </div>
+  )
+}
+
+
+const RETAILOR_OPTIONS: { value: RetailorReason; label: string; hint: string }[] = [
+  { value: "layout", label: "Layout not okay", hint: "Visual structure / formatting / hierarchy is off" },
+  { value: "shallow_detailing", label: "Shallow detailing", hint: "Bullets feel generic — not concrete enough" },
+  { value: "drifting_from_jd", label: "Drifting from JD", hint: "Bullets don't address what the JD actually asks for" },
+  { value: "other", label: "Other", hint: "Free-text — describe what's wrong" },
+]
+
+
+// localStorage keys for remembering the user's preferences across sessions.
+const ITERATE_PREF_KEY = "job_intake_retailor_iterate"
+const ITERATE_REMEMBER_KEY = "job_intake_retailor_iterate_remember"
+
+
+function RetailorDialog({
+  open,
+  onOpenChange,
+  jobId,
+  onQueued,
+}: {
+  open: boolean
+  onOpenChange: (o: boolean) => void
+  jobId: string
+  onQueued: () => void
+}) {
+  // Pull initial iterate / remember from localStorage. Default iterate=true
+  // (best-quality path: edit existing resume vs. fresh-tailor from base).
+  const initialRemember = typeof window !== "undefined"
+    ? localStorage.getItem(ITERATE_REMEMBER_KEY) === "1"
+    : false
+  const initialIterate = typeof window !== "undefined" && initialRemember
+    ? localStorage.getItem(ITERATE_PREF_KEY) !== "0"
+    : true
+
+  const [reason, setReason] = useState<RetailorReason>("layout")
+  const [details, setDetails] = useState("")
+  const [iterate, setIterate] = useState<boolean>(initialIterate)
+  const [remember, setRemember] = useState<boolean>(initialRemember)
+  const [submitting, setSubmitting] = useState(false)
+
+  const reset = () => {
+    setReason("layout")
+    setDetails("")
+    setSubmitting(false)
+    // Don't reset iterate/remember — those persist intentionally.
+  }
+
+  const submit = async () => {
+    if (reason === "other" && !details.trim()) {
+      toast.error("Please describe what's wrong")
+      return
+    }
+    if (remember) {
+      localStorage.setItem(ITERATE_REMEMBER_KEY, "1")
+      localStorage.setItem(ITERATE_PREF_KEY, iterate ? "1" : "0")
+    } else {
+      localStorage.removeItem(ITERATE_REMEMBER_KEY)
+      localStorage.removeItem(ITERATE_PREF_KEY)
+    }
+    setSubmitting(true)
+    try {
+      await retailorWithFeedback(jobId, reason, details.trim() || undefined, iterate)
+      toast.success(
+        iterate
+          ? "Iterating on existing resume — feedback queued"
+          : "Fresh re-tailor queued — feedback will be passed to the pipeline",
+      )
+      onQueued()
+      onOpenChange(false)
+      reset()
+    } catch (err) {
+      toast.error((err as Error).message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Dialog.Root
+      open={open}
+      onOpenChange={(o) => {
+        onOpenChange(o)
+        if (!o) reset()
+      }}
+    >
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60]" />
+        <Dialog.Content
+          className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[70] w-[92vw] max-w-md bg-background border border-border rounded-2xl shadow-2xl p-5 outline-none"
+        >
+          <Dialog.Title className="text-base font-semibold">
+            Why re-tailor?
+          </Dialog.Title>
+          <Dialog.Description className="text-xs text-muted-foreground mt-1">
+            Your feedback is passed to the resume pipeline so the next attempt addresses it specifically.
+          </Dialog.Description>
+
+          <div className="mt-4 space-y-2">
+            {RETAILOR_OPTIONS.map((opt) => {
+              const active = reason === opt.value
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setReason(opt.value)}
+                  className={cn(
+                    "w-full text-left px-3 py-2.5 rounded-xl border transition-all",
+                    active
+                      ? "border-primary bg-primary/10"
+                      : "border-border hover:border-foreground/40 bg-transparent",
+                  )}
+                >
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <span
+                      className={cn(
+                        "size-3.5 rounded-full border-2 grid place-items-center shrink-0",
+                        active ? "border-primary" : "border-muted-foreground/40",
+                      )}
+                    >
+                      {active && <span className="size-1.5 rounded-full bg-primary" />}
+                    </span>
+                    {opt.label}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5 ml-5">{opt.hint}</div>
+                </button>
+              )
+            })}
+          </div>
+
+          <textarea
+            value={details}
+            onChange={(e) => setDetails(e.target.value)}
+            placeholder={
+              reason === "other"
+                ? "Describe what's wrong (required)…"
+                : "Optional: add specific feedback the LLM should address…"
+            }
+            rows={3}
+            className="mt-3 w-full px-3 py-2 rounded-xl border border-border bg-muted/20 text-sm outline-none focus:border-primary placeholder:text-muted-foreground/60"
+          />
+
+          <div className="mt-3 space-y-2">
+            <label className="flex items-start gap-2 cursor-pointer text-xs">
+              <input
+                type="checkbox"
+                checked={iterate}
+                onChange={(e) => setIterate(e.target.checked)}
+                className="mt-0.5 size-4 rounded border-border bg-background text-primary focus:ring-primary"
+              />
+              <span>
+                <span className="text-foreground font-medium">Iterate on existing tailored resume</span>
+                <span className="block text-muted-foreground mt-0.5">
+                  Resumes the prior Claude session and edits resume.md in place. Falls back to fresh tailor if no prior run exists.
+                </span>
+              </span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer text-xs ml-6">
+              <input
+                type="checkbox"
+                checked={remember}
+                onChange={(e) => setRemember(e.target.checked)}
+                className="size-3.5 rounded border-border bg-background text-primary focus:ring-primary"
+              />
+              <span className="text-muted-foreground">Remember my choice</span>
+            </label>
+          </div>
+
+          <div className="mt-4 flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              disabled={submitting}
+              className="px-3 py-1.5 rounded-lg text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={submit}
+              disabled={submitting || (reason === "other" && !details.trim())}
+              className="px-3 py-1.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+            >
+              {submitting && <Loader2 className="size-3.5 animate-spin" />}
+              {submitting ? "Queueing…" : "Re-tailor with feedback"}
+            </button>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  )
+}
+
+
+function ResumeLink({ job, canMutate }: { job: JobDetailRow; canMutate: boolean }) {
+  const qc = useQueryClient()
+  const reupload = useMutation({
+    mutationFn: () => reuploadResume(job.id),
+    onSuccess: () => {
+      toast.success("Re-uploaded to Drive")
+      qc.invalidateQueries({ queryKey: ["job", job.id] })
+      qc.invalidateQueries({ queryKey: ["jobs"] })
+    },
+    onError: (err: Error) => toast.error(err.message),
+  })
+
+  if (!job.resume_path) return null
+
+  // State 1: Drive URL — open in new tab.
+  if (job.resume_path.startsWith("http")) {
+    return (
+      <a
+        href={job.resume_path}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mt-3 flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/15 text-emerald-500 transition-colors text-xs font-medium"
+      >
+        <span className="flex items-center gap-2">
+          <FileText className="size-4" />
+          Tailored resume
+        </span>
+        <ArrowUpRight className="size-4" />
+      </a>
+    )
+  }
+
+  // State 2: local path, file still on disk — offer reupload.
+  if (job.local_pdf_exists) {
+    return (
+      <button
+        disabled={!canMutate || reupload.isPending}
+        onClick={() => reupload.mutate()}
+        className="mt-3 w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/15 text-amber-500 transition-colors text-xs font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+      >
+        <span className="flex items-center gap-2">
+          {reupload.isPending ? <Loader2 className="size-4 animate-spin" /> : <CloudUpload className="size-4" />}
+          {reupload.isPending ? "Uploading…" : "Drive upload failed — Re-upload to Drive"}
+        </span>
+        <ArrowUpRight className="size-4" />
+      </button>
+    )
+  }
+
+  // State 3: local path, file gone — re-tailor required.
+  return (
+    <div className="mt-3 flex items-center gap-2 px-3 py-2.5 rounded-xl bg-amber-500/10 text-amber-500 text-xs font-medium cursor-default select-none">
+      <AlertTriangle className="size-4 shrink-0" />
+      <span>Resume PDF missing on disk — re-tailor required</span>
     </div>
   )
 }

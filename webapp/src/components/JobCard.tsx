@@ -1,4 +1,5 @@
 import { type JobSummary } from "@/lib/api"
+import { sourceFromId } from "@/lib/sources"
 import { cn, formatComp, formatDateTime, formatDateTimeFull } from "@/lib/utils"
 import { CheckCircle2, MapPin, Sparkles, Wand2 } from "lucide-react"
 
@@ -59,6 +60,7 @@ const TONE_CLASS: Record<string, string> = {
   bad:     "bg-rose-500/10 text-rose-500 border-rose-500/20",
 }
 
+
 export function JobCard({ job, onClick }: { job: JobSummary; onClick: () => void }) {
   const status = STATUS_STYLES[job.status] || STATUS_STYLES.new
   const StatusIcon = status.icon
@@ -110,6 +112,10 @@ export function JobCard({ job, onClick }: { job: JobSummary; onClick: () => void
 
           <div className="mt-0.5 flex items-center gap-2 text-[13px] text-muted-foreground min-w-0">
             <span className="font-medium text-foreground/80 truncate">{job.company}</span>
+            <span className="text-border">·</span>
+            <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
+              {sourceFromId(job.id)}
+            </span>
             {job.location && (
               <>
                 <span className="text-border">·</span>

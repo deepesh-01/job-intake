@@ -17,7 +17,11 @@ This is the **job-intake** repo (a.k.a. System B / `ready-to-apply`). Read the r
 
 ## Sibling project
 
-System A lives at `~/Documents/resume-builder/` (separate repo, separate Telegram bot). The cross-system contract is `dist/cli-tailor.js` invoked as a subprocess from `src/tailor_bridge.py`. **Do not modify System A from this repo.**
+System A lives at `~/Documents/resume-builder/` (separate repo, separate Telegram bot). The cross-system contract is **two** subprocesses invoked from `src/tailor_bridge.py`:
+- `dist/cli-tailor.js` — fresh tailor against a JD path (legacy; ADR-021 there, ADR-018 here)
+- `dist/cli-edit.js` — iterate on existing tailored resume via `runEdit()` (ADR-032 there, ADR-026 here)
+
+**Do not modify System A from this repo unless the change is a coordinated cross-repo move with a paired ADR.** When you add a new System A capability, update both ADRs (this repo's `docs/decisions.md` AND resume-builder's `docs/decisions.md`) so the contract stays documented on both sides.
 
 ## Push gotcha
 

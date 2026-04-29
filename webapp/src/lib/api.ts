@@ -23,6 +23,7 @@ export interface JobSummary {
   response_at: string | null
   followup_due_at: string | null
   notes: string | null
+  filter_updated_at: string | null
 }
 
 export interface JobDetail extends JobSummary {
@@ -30,6 +31,7 @@ export interface JobDetail extends JobSummary {
   jd_full_path: string
   jd_markdown: string | null
   tag_reasons: string | null
+  local_pdf_exists: boolean | null
 }
 
 export interface JobsListResponse {
@@ -154,6 +156,53 @@ export async function runProcessor(): Promise<{
 
 export async function fetchHealth(): Promise<{ ok: boolean; read_only: boolean }> {
   return jget("/api/health")
+}
+
+export type RetailorReason = "layout" | "shallow_detailing" | "drifting_from_jd" | "other"
+
+export async function retailorWithFeedback(
+  jobId: string,
+  reason: RetailorReason,
+  details?: string,
+  iterate: boolean = true,
+): Promise<{ ok: boolean; reason: string; iterate: boolean }> {
+  const r = await fetch(`/api/jobs/${encodeURIComponent(jobId)}/retailor`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ reason, details: details || null, iterate }),
+  })
+  if (!r.ok) {
+    const text = await r.text()
+    if (r.status === 403) throw new Error("Read-only — owner only")
+    throw new Error(`retailor ${r.status}: ${text.slice(0, 200)}`)
+  }
+  return r.json()
+}
+
+export async function reuploadResume(jobId: string): Promise<{ ok: boolean; drive_url: string }> {
+  const r = await fetch(`/api/jobs/${encodeURIComponent(jobId)}/resume/reupload`, {
+    method: "POST",
+    headers: authHeaders(),
+  })
+  if (!r.ok) {
+    const text = await r.text()
+    if (r.status === 403) throw new Error("Read-only — owner only")
+    throw new Error(`reupload ${r.status}: ${text.slice(0, 200)}`)
+  }
+  return r.json()
+}
+
+export async function startCopilot(jobId: string): Promise<{ ok: boolean; pid: number }> {
+  const r = await fetch(`/api/jobs/${encodeURIComponent(jobId)}/copilot/start`, {
+    method: "POST",
+    headers: authHeaders(),
+  })
+  if (!r.ok) {
+    const text = await r.text()
+    if (r.status === 403) throw new Error("Read-only — owner only")
+    throw new Error(`copilot ${r.status}: ${text.slice(0, 200)}`)
+  }
+  return r.json()
 }
 
 export async function retryErrored(): Promise<{ reset: number; job_ids: string[] }> {

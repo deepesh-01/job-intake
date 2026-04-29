@@ -27,6 +27,7 @@ const STATUS_OPTIONS = [
 
 const SORT_OPTIONS = [
   { value: "resume_match_desc", label: "Best match" },
+  { value: "filter_updated_desc", label: "Recently moved" },
   { value: "discovered_desc", label: "Newest first" },
   { value: "discovered_asc", label: "Oldest first" },
   { value: "comp_high_desc", label: "Highest comp" },
@@ -60,10 +61,20 @@ export function FilterBar({
   const toggleStatus = (s: string) => {
     if (statusLocked) return
     const has = value.status.includes(s)
-    onChange({
-      ...value,
-      status: has ? value.status.filter((x) => x !== s) : [...value.status, s],
-    })
+    const nextStatus = has ? value.status.filter((x) => x !== s) : [...value.status, s]
+    // Auto-flip the sort default when leaving / entering the "new" view —
+    // best-match makes sense for triage; recently-moved makes sense for
+    // tracking what we've just acted on. Only flips if the current sort
+    // is still on the *previous* default (i.e. user hasn't customised).
+    const isOnlyNew = nextStatus.length === 1 && nextStatus[0] === "new"
+    const wasOnlyNew = value.status.length === 1 && value.status[0] === "new"
+    let nextSort = value.sort
+    if (isOnlyNew && !wasOnlyNew && value.sort === "filter_updated_desc") {
+      nextSort = "resume_match_desc"
+    } else if (!isOnlyNew && wasOnlyNew && value.sort === "resume_match_desc") {
+      nextSort = "filter_updated_desc"
+    }
+    onChange({ ...value, status: nextStatus, sort: nextSort })
   }
 
   return (

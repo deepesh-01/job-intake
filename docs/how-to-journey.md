@@ -175,6 +175,12 @@ GOOGLE_OAUTH_TOKEN_PATH=/Users/deepeshz2/secrets/job-intake-oauth-token.json
 # Webapp owner-write token (omit for fully open mode)
 WRITE_TOKEN=<random 24-char>
 
+# Source auth — see `src/scout/sources/<name>.py` docstring for setup details
+LI_AT_COOKIE=<linkedin li_at value>          # LinkedIn auth (~365-day expiry)
+NAUKRI_COOKIE=<naukri nauk_at JWT>           # optional — personalizes results
+INSTAHYRE_COOKIE=<instahyre sessionid>       # optional — feed works unauth
+HIRIST_COOKIES=<full Cookie header value>    # required — full string, ~30-day expiry
+
 LOG_LEVEL=INFO
 ```
 

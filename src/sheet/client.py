@@ -142,6 +142,7 @@ class SheetClient:
             {"range": f"{schema.col_letter('last_change')}{row_index}", "values": [[last_change]]},
             {"range": f"{schema.col_letter('tailored_at')}{row_index}", "values": [[tailored_at]]},
             {"range": f"{schema.col_letter('status')}{row_index}", "values": [[new_status]]},
+            {"range": f"{schema.col_letter('filter_updated_at')}{row_index}", "values": [[tailored_at]]},
         ]
         ws.batch_update(body, value_input_option="USER_ENTERED")
 

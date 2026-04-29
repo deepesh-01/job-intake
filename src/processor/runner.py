@@ -21,7 +21,7 @@ from lib.drive import DriveClient
 from lib.logging import configure
 from sheet import schema
 from sheet.client import SheetClient, now_iso
-from tailor_bridge import run_tailor
+from tailor_bridge import run_edit, run_tailor
 
 _LOCK_ORPHAN_SECONDS = 60 * 60  # 1h per §10.7
 
@@ -86,14 +86,67 @@ def main() -> int:
                 errored += 1
                 continue
 
-            result = run_tailor(
-                job_id=job_id,
-                jd_path=jd_path,
-                chat_id=env.system_a_user_chat_id,
-                output_dir=str(tailored_dir),
-                system_a_path=env.system_a_path,
-                dry_run=env.tailor_dry_run,
-            )
+            # Re-tailor branch: if `data/jds_retailor/<safe>.json` exists,
+            # the user requested a re-tailor with feedback. The sidecar JSON
+            # carries `{reason, details, iterate}`:
+            #   - iterate=true → call System A's cli-edit.js, which resumes
+            #     the prior Claude session and edits the existing resume.md.
+            #   - iterate=false → run a fresh tailor with the feedback
+            #     prepended to the JD via the .md wrapper file (legacy).
+            # See ADR-026 (this repo) and ADR-032 (resume-builder).
+            import json as _json
+            retailor_dir = Path(env.data_dir) / "jds_retailor"
+            sidecar = retailor_dir / f"{_safe(job_id)}.json"
+            wrapper = retailor_dir / f"{_safe(job_id)}.md"
+
+            sidecar_data: dict | None = None
+            if sidecar.is_file():
+                try:
+                    sidecar_data = _json.loads(sidecar.read_text())
+                except Exception as e:
+                    log.warning("retailor_sidecar_parse_failed", job_id=job_id, err=str(e))
+                    sidecar_data = None
+
+            if sidecar_data and sidecar_data.get("iterate"):
+                instruction = sidecar_data.get("instruction") or ""
+                if not instruction:
+                    log.warning("retailor_sidecar_missing_instruction", job_id=job_id)
+                # System B job_id `naukri:ALL:060326022621` → System A slug
+                # `naukri-all-060326022621` (matches the slugFromPath rule
+                # in System A's cli-tailor.ts: lowercase + non-alnum→`-`).
+                import re as _re
+                job_slug = _re.sub(r"[^A-Za-z0-9]+", "-", _safe(job_id)).lower().strip("-")
+                result = run_edit(
+                    job_id=job_id,
+                    job_slug=job_slug,
+                    instruction=instruction,
+                    output_dir=str(tailored_dir),
+                    system_a_path=env.system_a_path,
+                    dry_run=env.tailor_dry_run,
+                )
+                # cli-edit returns EDIT_NO_PRIOR_JOB when there's nothing to
+                # iterate on. Fall back to fresh tailor with the wrapper.
+                if not result.ok and result.error and "EDIT_NO_PRIOR_JOB" in result.error:
+                    log.info("retailor_edit_no_prior_falling_back_to_tailor", job_id=job_id)
+                    tailor_jd_path = str(wrapper) if wrapper.is_file() else jd_path
+                    result = run_tailor(
+                        job_id=job_id,
+                        jd_path=tailor_jd_path,
+                        chat_id=env.system_a_user_chat_id,
+                        output_dir=str(tailored_dir),
+                        system_a_path=env.system_a_path,
+                        dry_run=env.tailor_dry_run,
+                    )
+            else:
+                tailor_jd_path = str(wrapper) if wrapper.is_file() else jd_path
+                result = run_tailor(
+                    job_id=job_id,
+                    jd_path=tailor_jd_path,
+                    chat_id=env.system_a_user_chat_id,
+                    output_dir=str(tailored_dir),
+                    system_a_path=env.system_a_path,
+                    dry_run=env.tailor_dry_run,
+                )
             if not result.ok:
                 _mark_error(sheet, row_idx, result.error or "unknown_error")
                 errored += 1
@@ -131,6 +184,21 @@ def main() -> int:
                         err=str(e)[:200],
                     )
                     # Fall back to local path — non-fatal.
+
+            # On success, clean up both the wrapper .md and the sidecar
+            # .json so the next normal run uses the original JD again.
+            # Failure leaves them in place so the user's feedback persists
+            # across retries.
+            for stale in (wrapper, sidecar):
+                if stale.is_file():
+                    try:
+                        stale.unlink()
+                        log.info("retailor_artifact_consumed", job_id=job_id, path=str(stale))
+                    except OSError as e:
+                        log.warning(
+                            "retailor_artifact_cleanup_failed",
+                            job_id=job_id, path=str(stale), err=str(e),
+                        )
 
             sheet.update_row_after_tailor(
                 row_idx,

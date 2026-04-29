@@ -121,6 +121,89 @@ def run_tailor(
     )
 
 
+def run_edit(
+    *,
+    job_id: str,
+    job_slug: str,
+    instruction: str,
+    output_dir: str,
+    system_a_path: Path,
+    dry_run: bool = False,
+    timeout: int = 600,
+) -> TailorResult:
+    """Invoke System A's `cli-edit.js` to iterate on an existing tailored
+    resume. System A resumes the prior Claude session and applies the
+    user's `instruction` (typically: "<reason category>: <free-text feedback>")
+    to the existing resume.md.
+
+    Falls back to None when no prior tailor exists for `job_slug` — the
+    caller (processor) should then run a fresh `run_tailor` against the
+    feedback-wrapped JD instead.
+    """
+    out_dir = Path(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    if dry_run:
+        return _mock_tailor(job_id, "<edit>", out_dir)
+
+    cli = system_a_path / "dist" / "cli-edit.js"
+    if not cli.is_file():
+        return TailorResult(
+            ok=False,
+            pdf_path=None,
+            last_change=None,
+            error=(
+                f"system_a_cli_missing: {cli} not built. "
+                "From System A: `npm run build`."
+            ),
+        )
+
+    started = time.monotonic()
+    try:
+        proc = subprocess.run(
+            [
+                "node", str(cli),
+                "--job-slug", job_slug,
+                "--instruction", instruction,
+                "--output-dir", str(out_dir),
+                "--output-format", "json",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd=str(system_a_path),
+        )
+    except subprocess.TimeoutExpired:
+        return TailorResult(False, None, None, "system_a_timeout")
+    except Exception as e:
+        return TailorResult(False, None, None, f"bridge_error: {e}")
+
+    duration_ms = int((time.monotonic() - started) * 1000)
+
+    data: dict | None = None
+    try:
+        data = json.loads(proc.stdout.strip().splitlines()[-1]) if proc.stdout.strip() else None
+    except (json.JSONDecodeError, IndexError):
+        pass
+
+    if data is None:
+        return TailorResult(
+            ok=False,
+            pdf_path=None,
+            last_change=None,
+            error=(proc.stderr or proc.stdout or f"exit={proc.returncode}")[:500],
+            duration_ms=duration_ms,
+        )
+
+    return TailorResult(
+        ok=bool(data.get("ok")),
+        pdf_path=data.get("pdf_path"),
+        last_change=data.get("last_change"),
+        error=data.get("error"),
+        duration_ms=duration_ms,
+    )
+
+
 def _mock_tailor(job_id: str, jd_path: str, out_dir: Path) -> TailorResult:
     """Stub used when TAILOR_DRY_RUN=true."""
     pdf = out_dir / f"{_safe(job_id)}.pdf"

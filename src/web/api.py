@@ -176,6 +176,7 @@ class JobSummary(BaseModel):
     response_at: str | None
     followup_due_at: str | None
     notes: str | None
+    filter_updated_at: str | None
 
 
 class JobDetail(JobSummary):
@@ -183,6 +184,11 @@ class JobDetail(JobSummary):
     jd_full_path: str
     jd_markdown: str | None      # body read from disk
     tag_reasons: str | None
+    # True iff resume_path is a local (non-http) path AND the file still
+    # exists on disk. Lets the frontend choose between "Re-upload to Drive"
+    # (file present) and "Re-tailor required" (file gone). Always None when
+    # resume_path is an http URL — the column is irrelevant in that case.
+    local_pdf_exists: bool | None = None
 
 
 class JobUpdate(BaseModel):
@@ -233,6 +239,7 @@ def _to_summary(d: dict[str, Any]) -> JobSummary:
         response_at=d.get("response_at") or None,
         followup_due_at=d.get("followup_due_at") or None,
         notes=d.get("notes") or None,
+        filter_updated_at=d.get("filter_updated_at") or None,
     )
 
 
@@ -247,12 +254,23 @@ def _to_detail(d: dict[str, Any]) -> JobDetail:
                 body = p.read_text(encoding="utf-8")
             except Exception:
                 body = None
+
+    # local_pdf_exists is only meaningful for non-http resume_paths.
+    rp = (d.get("resume_path") or "").strip()
+    local_pdf_exists: bool | None = None
+    if rp and not rp.startswith(("http://", "https://")):
+        try:
+            local_pdf_exists = Path(rp).is_file()
+        except (OSError, ValueError):
+            local_pdf_exists = False
+
     return JobDetail(
         **s,
         jd_snippet=d.get("jd_snippet", "") or "",
         jd_full_path=jd_path_str,
         jd_markdown=body,
         tag_reasons=d.get("tag_reasons") or None,
+        local_pdf_exists=local_pdf_exists,
     )
 
 
@@ -289,7 +307,7 @@ def list_jobs(
     ),
     sort: str = Query(
         "resume_match_desc",
-        description="resume_match_desc | discovered_desc | discovered_asc | comp_high_desc",
+        description="resume_match_desc | discovered_desc | discovered_asc | comp_high_desc | filter_updated_desc | filter_updated_asc",
     ),
     limit: int = Query(200, ge=1, le=2000),
     offset: int = Query(0, ge=0),
@@ -342,6 +360,17 @@ def list_jobs(
         rows.sort(key=lambda r: r.get("discovered_at") or "9999")
     elif sort == "comp_high_desc":
         rows.sort(key=lambda r: (r.get("comp_high_usd") or r.get("comp_high") or 0), reverse=True)
+    elif sort == "filter_updated_desc":
+        # Backfilled-fallback: use discovered_at when filter_updated_at empty
+        # (rows from before v3 schema migration that haven't been mutated yet).
+        rows.sort(
+            key=lambda r: r.get("filter_updated_at") or r.get("discovered_at") or "",
+            reverse=True,
+        )
+    elif sort == "filter_updated_asc":
+        rows.sort(
+            key=lambda r: r.get("filter_updated_at") or r.get("discovered_at") or "9999",
+        )
     else:
         rows.sort(key=lambda r: r.get("resume_match", 0.0), reverse=True)
 
@@ -387,6 +416,9 @@ def patch_job(job_id: str, payload: JobUpdate, request: Request) -> JobDetail:
                 detail=f"invalid status: {payload.status} (allowed: {sorted(schema.VALID_STATUSES)})",
             )
         updates["status"] = payload.status
+        # Stamp filter_updated_at on every status transition — drives the
+        # per-status "Recently moved" sort in the webapp.
+        updates["filter_updated_at"] = now_iso()
     if payload.applied_at is not None:
         updates["applied_at"] = payload.applied_at
     if payload.response_at is not None:
@@ -442,10 +474,13 @@ def retry_errored(request: Request) -> RetryResponse:
     status_col = schema.col_letter("status")
     last_change_col = schema.col_letter("last_change")
     tailored_at_col = schema.col_letter("tailored_at")
+    filter_col = schema.col_letter("filter_updated_at")
+    now = now_iso()
     for row_idx, _ in errored:
         body.append({"range": f"{status_col}{row_idx}", "values": [[schema.STATUS_TAILOR]]})
         body.append({"range": f"{last_change_col}{row_idx}", "values": [[""]]})
         body.append({"range": f"{tailored_at_col}{row_idx}", "values": [[""]]})
+        body.append({"range": f"{filter_col}{row_idx}", "values": [[now]]})
     ws.batch_update(body, value_input_option="USER_ENTERED")
     _cache.invalidate()
     return RetryResponse(reset=len(errored), job_ids=[i for _, i in errored])
@@ -561,6 +596,255 @@ def _id_from_lock(name: str, snap: _Snapshot) -> str | None:
         if id_.replace(":", "_").replace("/", "_") == base:
             return id_
     return None
+
+
+_RETAILOR_REASONS = {
+    "layout": "Layout not okay",
+    "shallow_detailing": "Shallow detailing — bullets feel generic / not concrete enough",
+    "drifting_from_jd": "Drifting from JD — bullets don't address what the JD asks for",
+    "other": "Other",
+}
+
+
+class RetailorRequest(BaseModel):
+    reason: str = Field(..., description="layout | shallow_detailing | drifting_from_jd | other")
+    details: str | None = Field(default=None, description="free text required when reason=other")
+    iterate: bool = Field(
+        default=True,
+        description="True = iterate on existing tailored resume (cli-edit), "
+        "False = fresh tailor with feedback in JD wrapper (cli-tailor).",
+    )
+
+
+@app.post("/api/jobs/{job_id:path}/retailor")
+def retailor_with_feedback(job_id: str, payload: RetailorRequest, request: Request) -> dict:
+    """Queue a row for re-tailor with explicit user feedback. The feedback
+    is prepended to the original JD as a wrapper file at
+    `data/jds_retailor/<safe_id>.md`, which the processor uses *instead*
+    of the original JD on the next pass — so System A's LLM picks up the
+    feedback via the existing `--jd-path` contract (no System A change).
+
+    Body: { reason: layout|shallow_detailing|drifting_from_jd|other, details?: str }
+    """
+    _require_write_auth(request)
+    if payload.reason not in _RETAILOR_REASONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"reason must be one of {sorted(_RETAILOR_REASONS)}",
+        )
+    if payload.reason == "other" and not (payload.details or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail="details is required when reason='other'",
+        )
+
+    snap = _load_snapshot()
+    row = next((r for r in snap.rows if r.get("id") == job_id), None)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"job not found: {job_id}")
+    row_idx = snap.by_id.get(job_id)
+    jd_path_str = row.get("jd_full_path") or ""
+    if not jd_path_str or not Path(jd_path_str).is_file():
+        raise HTTPException(
+            status_code=404,
+            detail=f"original JD missing on disk ({jd_path_str}) — can't re-tailor without it",
+        )
+
+    # Build the wrapper. The plain-prose intro is what the LLM sees first.
+    reason_label = _RETAILOR_REASONS[payload.reason]
+    details_text = (payload.details or "").strip()
+    feedback_block = (
+        "## RE-TAILOR FEEDBACK FROM USER\n\n"
+        "The previous tailoring attempt of this resume was reviewed by the "
+        "user and rejected with the following feedback:\n\n"
+        f"- **Issue category:** {reason_label}\n"
+    )
+    if details_text:
+        feedback_block += f"- **Specific feedback:** {details_text}\n"
+    feedback_block += (
+        "\n**Apply this feedback when re-tailoring.** Make explicit, "
+        "addressable changes that resolve the issue above. Do not regenerate "
+        "the same content — improve specifically along the feedback dimension.\n\n"
+        "---\n\n"
+        "## ORIGINAL JOB DESCRIPTION\n\n"
+    )
+    original_jd = Path(jd_path_str).read_text(encoding="utf-8")
+    wrapper_text = feedback_block + original_jd
+
+    env = load_env()
+    wrapper_dir = Path(env.data_dir) / "jds_retailor"
+    wrapper_dir.mkdir(parents=True, exist_ok=True)
+    safe_id = job_id.replace(":", "_").replace("/", "_")
+    wrapper_path = wrapper_dir / f"{safe_id}.md"
+    wrapper_path.write_text(wrapper_text, encoding="utf-8")
+
+    # Sidecar JSON drives the processor's mode choice (iterate vs fresh).
+    # Also carries a single `instruction` string ready for cli-edit.js — so
+    # the processor doesn't need to re-derive it from the wrapper file.
+    instruction_text = f"User feedback on previous tailored resume — {reason_label}."
+    if details_text:
+        instruction_text += f" Specific feedback: {details_text}"
+    instruction_text += (
+        " Edit resume.md in-place to address this feedback specifically. "
+        "Do not regenerate the same content — improve along the feedback dimension. "
+        "After editing, write a one-line summary of the changes to last_change.txt."
+    )
+    sidecar_path = wrapper_dir / f"{safe_id}.json"
+    import json as _json
+    sidecar_path.write_text(
+        _json.dumps({
+            "reason": payload.reason,
+            "reason_label": reason_label,
+            "details": details_text,
+            "iterate": bool(payload.iterate),
+            "instruction": instruction_text,
+            "queued_at": now_iso(),
+        }, indent=2),
+        encoding="utf-8",
+    )
+
+    # Flip the row to status=tailor + clear resume_path so the processor
+    # re-enqueues it. Stamp filter_updated_at so it surfaces in "Recently
+    # moved". Stash the feedback summary in last_change for audit.
+    if row_idx is None:
+        raise HTTPException(status_code=500, detail="row vanished from snapshot")
+    last_change_msg = f"Retailor requested: {reason_label}"
+    if details_text:
+        last_change_msg += f" — {details_text[:140]}"
+    now = now_iso()
+    ws = _sheet._ws(schema.JOBS_TAB)
+    ws.batch_update(
+        [
+            {"range": f"{schema.col_letter('status')}{row_idx}", "values": [[schema.STATUS_TAILOR]]},
+            {"range": f"{schema.col_letter('resume_path')}{row_idx}", "values": [[""]]},
+            {"range": f"{schema.col_letter('last_change')}{row_idx}", "values": [[last_change_msg[:200]]]},
+            {"range": f"{schema.col_letter('filter_updated_at')}{row_idx}", "values": [[now]]},
+        ],
+        value_input_option="USER_ENTERED",
+    )
+    _cache.invalidate()
+    return {
+        "ok": True,
+        "wrapper_path": str(wrapper_path),
+        "sidecar_path": str(sidecar_path),
+        "reason": payload.reason,
+        "iterate": bool(payload.iterate),
+        "queued_for": "tailor",
+    }
+
+
+@app.post("/api/jobs/{job_id:path}/resume/reupload")
+def resume_reupload(job_id: str, request: Request) -> dict:
+    """Re-upload a row's local PDF to Drive and patch the sheet's
+    resume_path cell. Heals the rare 'Drive upload failed at tailor time'
+    state without requiring an expensive re-tailor (~$0.40 saved).
+
+    400: resume_path already http (nothing to reupload).
+    404: resume_path empty OR local file missing (re-tailor needed).
+    """
+    _require_write_auth(request)
+    snap = _load_snapshot()
+    row = next((r for r in snap.rows if r.get("id") == job_id), None)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"job not found: {job_id}")
+    rp = (row.get("resume_path") or "").strip()
+    if not rp:
+        raise HTTPException(status_code=404, detail="row has no resume_path — re-tailor required")
+    if rp.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="resume_path is already an http URL")
+
+    local_path = Path(rp)
+    if not local_path.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail=f"local PDF missing at {rp} — re-tailor required",
+        )
+
+    env = load_env()
+    if not env.drive_folder_id:
+        raise HTTPException(status_code=500, detail="Drive folder not configured")
+
+    # Prefer OAuth user delegation (matches processor); fall back to SA.
+    if env.drive_oauth_token_path and env.drive_oauth_token_path.is_file():
+        from lib.drive import DriveClient
+        drive = DriveClient.from_oauth_token(env.drive_oauth_token_path)
+    else:
+        from lib.drive import DriveClient
+        drive = DriveClient.from_service_account(env.creds_path)
+
+    import re as _re
+    _short = lambda s: _re.sub(r"[^A-Za-z0-9 ]+", " ", s or "").strip()[:50]
+    suffix = job_id.split(":")[-1][:8]
+    display_name = f"{_short(row.get('company') or '')} - {_short(row.get('role') or '')} ({suffix}).pdf"
+
+    drive_url = drive.upload_pdf(
+        local_path=local_path,
+        folder_id=env.drive_folder_id,
+        display_name=display_name,
+    )
+
+    ws = _sheet._ws(schema.JOBS_TAB)
+    row_idx = snap.by_id.get(job_id)
+    if row_idx is None:
+        raise HTTPException(status_code=500, detail="row vanished from snapshot")
+
+    now = now_iso()
+    ws.batch_update(
+        [
+            {"range": f"{schema.col_letter('resume_path')}{row_idx}", "values": [[drive_url]]},
+            {"range": f"{schema.col_letter('filter_updated_at')}{row_idx}", "values": [[now]]},
+        ],
+        value_input_option="USER_ENTERED",
+    )
+    _cache.invalidate()
+    return {"ok": True, "drive_url": drive_url}
+
+
+@app.post("/api/jobs/{job_id:path}/copilot/start")
+def copilot_start(job_id: str, request: Request) -> dict:
+    """Launch the Apply-Copilot for a single row. Fires a Playwright
+    subprocess that pops up a Chromium window pointed at the job's apply
+    URL. Returns immediately; the user interacts with the window directly
+    and marks the row `applied` themselves when done.
+
+    Currently supports LinkedIn only — other ATSes return 400 until their
+    handlers ship.
+    """
+    _require_write_auth(request)
+    snap = _load_snapshot()
+    row = next((r for r in snap.rows if r.get("id") == job_id), None)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"job not found: {job_id}")
+    link = (row.get("link") or "").strip()
+    if not link:
+        raise HTTPException(status_code=400, detail="row has no link")
+    if "linkedin.com" not in link:
+        raise HTTPException(
+            status_code=400,
+            detail=f"copilot only supports LinkedIn for now (link host: {link[:60]})",
+        )
+
+    repo_root = Path(__file__).resolve().parent.parent.parent
+    proc = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "apply",
+            "linkedin",
+            link,
+            "--role", row.get("role") or "",
+            "--company", row.get("company") or "",
+        ],
+        cwd=str(repo_root),
+        env={
+            **os.environ,
+            "PYTHONPATH": str(repo_root / "src"),
+        },
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    return {"ok": True, "pid": proc.pid, "job_id": job_id, "link": link}
 
 
 @app.get("/api/process/status")
@@ -708,6 +992,11 @@ async def process_queue(request: Request) -> dict:
         },
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
+        # Detach from uvicorn's process group so a webapp reload doesn't
+        # SIGTERM the processor mid-tailor. (Bug observed 2026-04-29: a
+        # rebuild + `launchctl kickstart -k web` killed an in-flight refine
+        # step, leaving the row in `tailor` with a stale lock.)
+        start_new_session=True,
     )
     stdout, stderr = await proc.communicate()
     _cache.invalidate()

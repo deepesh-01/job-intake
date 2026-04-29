@@ -1,7 +1,7 @@
 """Canonical Sheet schema. SCHEMA_VERSION must be bumped when columns change."""
 from __future__ import annotations
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 JOBS_TAB = "Jobs"
 BOARDS_TAB = "Boards"
@@ -36,6 +36,11 @@ JOBS_COLUMNS = [
     "notes",
     # v2 — resume↔JD deterministic skill-overlap score, 0.0-1.0.
     "resume_match",
+    # v3 — UTC ISO timestamp of the last status transition. Updated by every
+    # mutation path that flips status (scout insert, processor tailor/error,
+    # webapp PATCH, retry-errored, retroactive trim, archive). Sortable per
+    # filter — "Recently moved" view shows freshest transitions first.
+    "filter_updated_at",
 ]
 
 BOARDS_COLUMNS = [

@@ -837,7 +837,13 @@ def copilot_start(job_id: str, request: Request) -> dict:
             detail=f"copilot only supports LinkedIn for now (link host: {link[:60]})",
         )
 
+    import time as _time
     repo_root = Path(__file__).resolve().parent.parent.parent
+    runs_dir = repo_root / "data" / "apply_runs"
+    runs_dir.mkdir(parents=True, exist_ok=True)
+    safe_id = job_id.replace(":", "_").replace("/", "_")
+    log_path = runs_dir / f"{safe_id}_{int(_time.time())}.log"
+    log_handle = open(log_path, "w", buffering=1)  # line-buffered for tail -f
     proc = subprocess.Popen(
         [
             sys.executable,
@@ -853,11 +859,17 @@ def copilot_start(job_id: str, request: Request) -> dict:
             **os.environ,
             "PYTHONPATH": str(repo_root / "src"),
         },
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stdout=log_handle,
+        stderr=subprocess.STDOUT,
         start_new_session=True,
     )
-    return {"ok": True, "pid": proc.pid, "job_id": job_id, "link": link}
+    return {
+        "ok": True,
+        "pid": proc.pid,
+        "job_id": job_id,
+        "link": link,
+        "log_path": str(log_path),
+    }
 
 
 @app.get("/api/process/status")

@@ -1178,6 +1178,108 @@ breadcrumb, not source state. Ignored.
   resume-builder; CLAUDE.md and `_bmad-output/project-context.md` in this
   repo updated to list both CLIs as the cross-system contract.
 
+# Step 30 — Apply Co-Pilot (LinkedIn Easy Apply, headful Playwright) — ADR-027
+
+## 30.1 — `src/apply/launcher.py` + `__main__.py` + `profile.py`
+- Headful Chromium-for-Testing via Playwright `launch_persistent_context`
+  pointed at `data/playwright/linkedin/` (cookies + localStorage cached).
+- User-Agent set to a real Chrome UA;
+  `--disable-blink-features=AutomationControlled` to avoid LinkedIn's
+  cheap automation checks. No detection problems observed in 5 test runs.
+- Click strategy for Easy Apply target: combined selector list covers
+  BOTH the legacy `<button class='jobs-apply-button'>` form AND the
+  new SDUI `<a href='.../apply/?openSDUIApplyFlow=true' aria-label='Easy
+  Apply to this job'>` markup. `wait_for_selector(..., timeout=15_000)`
+  to handle React's async hydration.
+- `_wait_for_login` polls `page.url` for non-`/login` and non-`/checkpoint`,
+  then re-navigates to the original job URL (LinkedIn's post-login
+  redirect lands on `/feed`, not the job page — caught on first run).
+
+## 30.2 — `data/apply_profile.yaml` (gitignored)
+- Identity / current_role / comp / work_auth / per-stack experience /
+  EEO defaults / cover_note_template (placeholder).
+- New blocks added 2026-04-30: `skills_yes_keywords` and `skills_no_keywords`
+  for Yes/No knockouts. The resolver matches signal-words ("experience",
+  "familiar", "worked with") in the question + cross-references these lists.
+- Float values (e.g. `aws: 3.5`) preserved end-to-end via `years_for()`'s
+  `int(f) if f.is_integer() else f` post-process.
+- `default: 0` (changed from `default: 3` per user) — unknown stacks read
+  as "no experience" rather than overstating to total years.
+
+## 30.3 — Webapp button + per-run logs
+- "Apply with co-pilot" button is full-width, visible only when
+  `status='ready'` AND `link contains linkedin.com`. POSTs to
+  `/api/jobs/{id}/copilot/start`.
+- Subprocess spawned with `start_new_session=True` (per ADR-024) so a
+  webapp reload doesn't kill an in-flight apply.
+- stdout/stderr redirected to `data/apply_runs/<safe_id>_<unix_ts>.log`,
+  line-buffered for `tail -f`. Endpoint response includes `log_path`.
+
+## 30.4 — Submit-block + Re-autofill banner
+- Capture-phase click interceptor injected via `page.evaluate`. Strict
+  immediate-target check only — no DOM-parent walk (prior version
+  blocked Next/Continue buttons because their ancestors contained
+  "Submit application" text in modal heading / disclaimer).
+- Match patterns: aria-label `^submit application` or `^submit$`;
+  visible text exact-match `submit application` or `submit`. Anything
+  else passes through.
+- Floating amber banner injected at top of page with three controls:
+  the lock indicator, **🤖 Re-autofill this step** button (sets
+  `window.__copilotRefillRequested = true`), and **Unlock Submit**
+  button (sets `window.__copilotSubmitUnlocked = true` + colors banner
+  green to confirm).
+- Python loop polls `__copilotRefillRequested` every 500ms; when set,
+  re-runs the autofill walker on whatever's currently visible. Loop
+  exits on user closing the Chromium window.
+
+## 30.5 — `_extract_question_label` (smarter heading detection)
+- Prior implementation grabbed `grp.locator("label, span...").first` —
+  for radio groups returned the option label ("Yes") not the question
+  heading. 8 of 14 questions on the WaferWire test run skipped as
+  `unrecognised question, skipping: Yes`.
+- New strategy: `<legend>` first (semantic radio heading), then
+  LinkedIn's `t-bold` / `fb-form-element-label__text`, then
+  `[role='heading']` / `<h3>`. Falls back to first label/span whose text
+  is NOT in the option-token set (`{"yes", "no", "decline", ...}`).
+
+## 30.6 — Yes/No skills resolver
+- Added a new `_resolve_answer` branch keyed on signal-words
+  ("experience", "familiar", "worked with", "knowledge of", "exposure
+  to", "comfortable with", "have you", "do you have").
+- Cross-references question against `skills_yes_keywords` →  return
+  `"Yes"`; against `skills_no_keywords` → return `"No"`. Otherwise
+  None (skip; user fills manually).
+- Smoke-tested against tonight's 8 unrecognised questions: 6/8 now
+  resolve correctly. The two that stay None ("System Reliability &
+  Performance Optimization" — no signal-word; "Do you have experience
+  with Java?" — Java=0 in profile, conservative skip) are correct
+  conservative outcomes.
+
+## 30.7 — End-to-end validation (WaferWire row, 2026-04-30)
+- LinkedIn URL: `https://in.linkedin.com/jobs/view/.../senior-software-engineer-backend-at-waferwire-cloud-technologies-4404259896/`
+- 4 attempted runs over the course of debugging (selector misses, Next-
+  button blocked bug, orphan Chromium lock, etc.); 5th attempt completed
+  the apply submission successfully.
+- Final autofill stats: 3 of 14 fields autofilled (phone correctly;
+  Java=0 + API=0 mis-defaulted to 0 because user hadn't set
+  skills_yes_keywords yet — fixed in same session). 8 unrecognised
+  questions skipped because of the label-extraction bug — also fixed.
+- User clicked Unlock Submit + Submit; LinkedIn confirmed application
+  sent. Cost: ~$0 incremental (Playwright runs locally; no Claude calls
+  during autofill).
+
+## 30.8 — Follow-ups (deferred)
+- aria-labelledby attribute resolution in `_extract_question_label`.
+- Cross-reference per-stack `experience` years (`> 0`) into the Yes/No
+  resolver — if a question mentions a stack the user has nonzero years
+  of, default to "Yes" without needing it in `skills_yes_keywords`.
+- Workday handler (6 rows in queue use Workday — second-largest cluster
+  after LinkedIn).
+- Render-loop in `cli-edit.js` (System A) for true page-count
+  enforcement at render time, not via repeated user-side iteration.
+- Profile retention/rotation — `data/apply_runs/<...>.log` files
+  accumulate forever; add a 30-day cleanup cron.
+
 ## 29.6 — Cookie env vars (now four sources need creds)
 - `LI_AT_COOKIE` (LinkedIn auth, ~365-day expiry)
 - `NAUKRI_COOKIE` (Naukri optional, sent as Bearer for personalized results)

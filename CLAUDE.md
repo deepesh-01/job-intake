@@ -12,6 +12,7 @@ This is the **job-intake** repo (a.k.a. System B / `ready-to-apply`). Read the r
 | "Why is it built this way?" / "Should we change X?" | [`docs/decisions.md`](./docs/decisions.md) — ADR log. Check this before proposing architectural changes; many "obvious improvements" are explicitly rejected with reasoning. |
 | Source diversity / why so few India jobs / how to broaden | [`docs/sources-roadmap.md`](./docs/sources-roadmap.md) |
 | Build history / what shipped when | [`docs/tasks.md`](./docs/tasks.md) |
+| Apply Co-Pilot (LinkedIn Easy Apply, Playwright) | [`src/apply/launcher.py`](./src/apply/launcher.py) docstring + ADR-027. Profile config at `data/apply_profile.yaml` (gitignored). Per-run logs at `data/apply_runs/`. |
 | Original v1 design (frozen, historical) | [`docs/job-intake-design-v1-original.md`](./docs/job-intake-design-v1-original.md) |
 | Architecture map / which symbol depends on what | `graphify-out/GRAPH_REPORT.md` if present, else run `/graphify ./src` to regenerate |
 

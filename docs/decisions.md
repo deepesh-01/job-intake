@@ -728,3 +728,125 @@ instruction → the resume gets edited specifically along that dimension.
 This is the foundation for the "review process" the user explicitly
 flagged as essential. Cross-repo: System B knows the cli-edit.js
 contract; System A's ADR-032 documents the same contract from its side.
+
+---
+
+## ADR-027 · Apply Co-Pilot — headful Playwright + submit-block + skills-keywords resolver
+**Date:** 2026-04-30 · **Status:** Accepted (LinkedIn Easy Apply validated end-to-end on the WaferWire row)
+
+**Context.** Last-mile friction was form-filling, not decision-making —
+the `ready` queue was clean enough that the bottleneck became the
+~5–10 minutes per application typing the same fields (name / phone /
+work-auth / years-of-stack-X) and answering employer custom Yes/No
+knockouts ("Do you have experience with Distributed Systems?"). The
+user wanted assist, not full automation: "I'll handle login, file
+upload, and the final Submit click; you autofill the boring fields."
+
+**Decision.** A headful Playwright Chromium that the user drives.
+Architecture:
+
+1. **Profile YAML at `data/apply_profile.yaml`** — single source of
+   truth for the user's identity, comp, work-auth, per-stack years, and
+   `skills_yes_keywords` / `skills_no_keywords` lists. Gitignored
+   (contains phone / LinkedIn URL / CTC).
+2. **`src/apply/launcher.py`** — `run_linkedin_easy_apply(job_url)`:
+   launches Chromium-for-Testing in a `launch_persistent_context` mode
+   pointed at `data/playwright/linkedin/` (cookies + localStorage cached
+   across runs; first-run requires user login + 2FA). User-Agent set
+   to a real Chrome string; `--disable-blink-features=AutomationControlled`
+   to dodge LinkedIn's cheap automation checks.
+3. **Webapp button:** "Apply with co-pilot" full-width on the
+   JobDetail drawer, visible only when `status='ready'` and
+   `link contains linkedin.com`. POSTs to
+   `/api/jobs/{id}/copilot/start` which spawns `python -m apply
+   linkedin <url>` with `start_new_session=True` (per ADR-024).
+4. **Subprocess logs to `data/apply_runs/<safe_id>_<ts>.log`** so we
+   can `tail -f` selector misses + autofill decisions.
+5. **Submit-block.** A capture-phase click interceptor injected via
+   `page.evaluate(...)`. Strict immediate-target check (`isSubmit(e.target)`
+   only — no DOM-parent walk; prior version blocked Next/Continue
+   buttons because their ancestors contained "Submit application" text
+   somewhere in the modal). Floating banner at top of page shows
+   `🔒 Submit blocked` + `🤖 Re-autofill this step` + `Unlock Submit`.
+6. **Re-autofill loop.** Initial autofill on modal open; then Python
+   polls `window.__copilotRefillRequested` every 500ms. User edits a
+   field manually OR advances to a new step (clicking LinkedIn's Next
+   button) → clicks the banner's Re-autofill → my walker re-runs.
+7. **`_extract_question_label`** — the question heading prefers
+   `<legend>` (semantic radio-group label), then LinkedIn's t-bold /
+   `fb-form-element-label__text` classes, then `[role="heading"]` /
+   `<h3>`. Skips option-token strings ("yes"/"no"/"decline") so radio
+   group questions don't come through as the option label.
+8. **`skills_yes_keywords` resolver.** For Yes/No knockouts ("Do you
+   have experience with X?"), the resolver gates on signal-words
+   ("experience", "familiar", "worked with", "knowledge of", etc.)
+   and cross-references the question against the user's
+   `skills_yes_keywords` (positive claims) and `skills_no_keywords`
+   (explicit denials). Anything ambiguous returns None — the user
+   answers manually. Avoids both over-claiming and over-denying.
+9. **Selector strategy** for Easy Apply target — LinkedIn ships TWO
+   markups: legacy `<button class='jobs-apply-button'>` and the new
+   SDUI flow `<a href='/jobs/view/<id>/apply/?openSDUIApplyFlow=true'
+   aria-label='Easy Apply to this job'>`. The CSS-module class names
+   ("`_41df6e23`"…) rotate frequently; only `aria-label` and visible
+   text are stable hooks. Selector list covers both; uses
+   `wait_for_selector(..., timeout=15_000)` to give React time to
+   hydrate after URL change.
+
+**Reasoning.**
+- **Headful, not headless.** Last 20% of any apply flow needs human
+  judgment (custom essay questions, file uploads, submit decision).
+  Headless = adversarial automation = LinkedIn account ban risk.
+  Headful = co-pilot = no detection issues observed.
+- **Persistent context per host.** First login is unavoidable. Saving
+  cookies under `data/playwright/<host>/` means subsequent runs land
+  pre-authed; turns "5-min login dance per row" into a one-time event.
+- **Submit-block is opt-out, not opt-in.** Default-blocked is the safe
+  default for an autofill assistant — users are conditioned to click
+  Submit when forms look done; if our autofill wrote 0s into a critical
+  field, a default-allowed flow would burn an application.
+- **YAML profile beats per-application input.** Custom-questions like
+  "Years of Java" are deterministic from a profile; rewriting every
+  answer per row would defeat the point.
+- **Skills-keywords beats free-text resume parsing.** A keyword list
+  the user maintains is opinionated, fast, and avoids the
+  hallucination risk of "look at the resume and infer Yes/No."
+
+**Trade-offs accepted.**
+- Profile YAML lives outside git (gitignored). Migrating to a new machine
+  requires a manual copy. Acceptable; it's secrets-grade data.
+- LinkedIn rotates DOM markup roughly per quarter. Selectors will
+  need re-tuning. The approach is to log every selector miss to the
+  per-run log and harden iteratively. The first WaferWire run had 8
+  unrecognised questions; with the bugs caught (label extraction +
+  Yes/No resolver), projected hit rate goes from ~7% → ~50–70%.
+- `data/apply_runs/` accumulates per-run logs forever. No retention
+  yet. Worth a 30-day cleanup cron eventually (cheap to add).
+- Re-autofill is single-step idempotent — clicking it always overwrites
+  fields with profile values, even if the user edited them. Future
+  improvement: only fill empty fields. Acceptable for now since the
+  user controls when Re-autofill fires.
+- The script doesn't enforce the per-step structure of LinkedIn's
+  modal — it walks all visible question groups on each Re-autofill
+  click. Works because user advances steps manually; if LinkedIn
+  ever switches Easy Apply to a single-page form, no change needed.
+
+**Consequence.** First-run through-the-flow on WaferWire (Easy Apply,
+2 steps, 14 question groups) on 2026-04-30: 1 field autofilled
+correctly, 2 mis-defaulted (Java=0 / API=0), 8 unrecognised. Two bugs
+caught + patched on the same evening (label extraction; Yes/No
+resolver); next test should hit ~6-8/14 fields. Cross-repo: System B
+owns the launcher; System A is unaffected (Easy Apply happens entirely
+on LinkedIn, no resume-builder involvement beyond the tailored PDF
+already on Drive).
+
+Future hardening (logged in tasks.md as Step 30 follow-ups):
+- aria-labelledby attribute resolution in `_extract_question_label`
+  (catches groups using `aria-labelledby='qNNN'` instead of `<legend>`)
+- Cross-reference per-stack experience numbers when a Yes/No question
+  mentions a stack with `> 0` years (currently the resolver doesn't
+  check that — relies only on the keyword lists)
+- Workday handler — second-largest Easy-Apply-equivalent flow in the
+  user's queue (6 rows currently)
+- Render-loop in cli-edit.js (System A) so re-tailor page constraints
+  are enforced at render time, not by repeated user-side iteration

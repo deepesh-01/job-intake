@@ -338,6 +338,43 @@ also accessible from Sheets UI funnel icon → Filter views):
 5. Apply on the company's site, attach the Drive PDF.
 6. Back in webapp drawer: tap **Applied**. Status flips, applied_at filled.
 
+### Apply Co-Pilot (LinkedIn Easy Apply only) — ADR-027
+
+For LinkedIn Easy Apply rows, the drawer also shows a full-width
+**"Apply with co-pilot"** button below the three status CTAs. Click it
+and a separate Chromium-for-Testing window pops up driven by Playwright:
+
+1. **First-time setup:** edit `data/apply_profile.yaml` — fill in
+   `identity.full_name`, `phone`, `linkedin_url`, plus
+   `comp.current_inr_lpa` / `expected_inr_lpa_*` / `notice_period_*`
+   and per-stack `experience.*` years. Tune the
+   `skills_yes_keywords` / `skills_no_keywords` lists for your stack.
+   This file is gitignored — copy it manually when migrating machines.
+2. **First run on a given host:** the Chromium opens to LinkedIn login.
+   Type credentials + handle 2FA; session persists to
+   `data/playwright/linkedin/` so future runs land already-authed.
+3. **What autofills:** identity (name/email/phone), work-auth Yes/No,
+   per-stack years (matching keywords from the question), Yes/No
+   knockouts whose subject matches your `skills_yes_keywords`.
+4. **What you handle:** resume upload (download from Drive in the
+   drawer first), captchas, multi-paragraph essay questions, and the
+   final Submit click. **Submit is hard-blocked by default** via a
+   floating amber banner at the top of the page — click "Unlock Submit"
+   when you're ready to actually submit.
+5. **Re-autofill across steps:** advance through LinkedIn's modal by
+   clicking Next manually. To autofill the new step, click the banner's
+   **🤖 Re-autofill this step** button. Repeat per step.
+6. **Logs** at `data/apply_runs/<safe_id>_<unix_ts>.log` (line-buffered;
+   `tail -f` for live debugging). Records every selector miss + every
+   `unrecognised question` so you can iteratively tune the resolver.
+7. **Stale Chromium gotcha:** if you close the Chromium tab but the
+   parent process didn't fully die (rare), the next run errors with
+   `TargetClosedError: Opening in existing browser session`. Cleanup:
+   `pkill -f 'Google Chrome for Testing'` then click the button again.
+
+Currently LinkedIn-only (Easy Apply path). Workday is the next
+high-leverage handler to add — 6 ready rows in the queue use Workday.
+
 ### Follow-up nudges (automatic)
 
 Each Scout run sweeps `status=applied` rows. If `applied_at + 7d <= today`

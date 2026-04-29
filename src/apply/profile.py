@@ -24,9 +24,26 @@ class Profile:
                 return default
         return cur
 
-    def years_for(self, stack: str) -> int:
+    def years_for(self, stack: str) -> int | float:
+        """Years of experience for a stack. Returns int when whole, float when
+        half-years are configured (e.g. AWS=3.5). Falls back to `default` if
+        the stack isn't enumerated; 0 if there's no default either.
+
+        The caller stringifies the value for form fills — `3` and `3.5` both
+        render correctly in a number input.
+        """
         exp = self.raw.get("experience") or {}
-        return int(exp.get(stack.lower()) or exp.get("default") or 0)
+        raw = exp.get(stack.lower())
+        if raw is None:
+            raw = exp.get("default")
+        if raw is None:
+            return 0
+        try:
+            f = float(raw)
+        except (TypeError, ValueError):
+            return 0
+        # Strip the .0 when it's a whole number so the form gets "3" not "3.0".
+        return int(f) if f.is_integer() else f
 
 
 def load_profile() -> Profile:

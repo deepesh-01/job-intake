@@ -71,6 +71,22 @@ def run_linkedin_easy_apply(
         # Step 1: ensure user is logged in. LinkedIn redirects to /login if not.
         _wait_for_login(page)
 
+        # After login, LinkedIn often redirects to /feed instead of back to
+        # the original job URL. If we're not on the job page, re-navigate.
+        # Without this the Easy Apply selector search runs on the feed page
+        # and silently misses (observed 2026-04-30 first-run).
+        try:
+            current = page.url
+        except Exception:  # noqa: BLE001
+            current = ""
+        job_path = job_url.split("?")[0]
+        if job_path not in current:
+            log.info("post-login URL mismatch; re-nav to job page", extra={"current": current})
+            try:
+                page.goto(job_url, wait_until="domcontentloaded", timeout=30_000)
+            except PlaywrightTimeout:
+                log.warning("re-nav timeout; proceeding anyway")
+
         # Step 2: click "Easy Apply" — there are several variants of the button.
         easy_apply_clicked = _click_easy_apply(page)
         if not easy_apply_clicked:
@@ -78,13 +94,43 @@ def run_linkedin_easy_apply(
             _wait_until_closed(page)
             return {"submitted": False, "reason": "no_easy_apply", "filled_fields": []}
 
-        # Step 3: autofill the multi-step modal.
-        filled = _autofill_easy_apply_modal(page, profile, job_role, job_company)
+        # Step 2.5: install the submit-block + Re-autofill banner.
+        _install_submit_block(page)
 
-        # Step 4: hand control back. User clicks Submit, reviews answers, etc.
-        result = _wait_until_closed(page)
-        result["filled_fields"] = filled
-        return result
+        # Step 3: autofill loop. Initial autofill on whatever step is showing,
+        # then wait for user actions (Re-autofill click → re-run, window
+        # close → exit). Each Re-autofill walks ALL visible questions in the
+        # current step — so the user can edit a value and click Re-autofill
+        # OR advance to a new step (clicking LinkedIn's Next manually) and
+        # click Re-autofill to populate the new step's fields.
+        all_filled: list[str] = []
+        round_num = 0
+        while True:
+            round_num += 1
+            filled = _autofill_easy_apply_modal(page, profile, job_role, job_company)
+            log.info("autofill round %d filled %d field(s): %s",
+                     round_num, len(filled), filled[:5])
+            all_filled.extend(filled)
+            action = _wait_for_user_action(page, timeout_seconds=3600)
+            if action == "close":
+                return {
+                    "submitted": True,
+                    "reason": "closed_by_user",
+                    "filled_fields": all_filled,
+                }
+            if action == "timeout":
+                return {
+                    "submitted": False,
+                    "reason": "idle_timeout_1h",
+                    "filled_fields": all_filled,
+                }
+            # action == 'refill' → loop and run autofill again on whatever
+            # step is currently visible. Re-injection of the banner is safe
+            # (idempotent thanks to the __copilotSubmitBlockInstalled flag).
+            try:
+                page.evaluate(_SUBMIT_BLOCK_JS)
+            except Exception:  # noqa: BLE001
+                pass
 
 
 def _launch(p: Playwright, user_data_dir: Path) -> Any:
@@ -102,6 +148,126 @@ def _launch(p: Playwright, user_data_dir: Path) -> Any:
     )
 
 
+_SUBMIT_BLOCK_JS = r"""
+(() => {
+  if (window.__copilotSubmitBlockInstalled) return;
+  window.__copilotSubmitBlockInstalled = true;
+  window.__copilotSubmitUnlocked = false;
+  window.__copilotRefillRequested = false;
+
+  // Strict immediate-target check ONLY — do NOT walk up the parent chain.
+  // Walking up caused Next/Continue buttons to be blocked because their
+  // ancestors contained text like "Submit application" (footer disclaimer,
+  // step heading on a later step, etc.).
+  const isSubmit = (el) => {
+    if (!el || el.nodeType !== 1) return false;
+    const text = (el.innerText || el.textContent || '').trim().toLowerCase();
+    const aria = (el.getAttribute('aria-label') || '').toLowerCase();
+    // aria-label EXACTLY mentioning Submit
+    if (/^submit application/i.test(aria) || /^submit$/i.test(aria)) return true;
+    // Visible label EXACTLY "Submit application" or "Submit" — exact-only
+    // so "Submit & Save Draft" still triggers but "Save and submit later"
+    // does not. Whole-string match.
+    if (/^submit application$|^submit$/i.test(text)) return true;
+    return false;
+  };
+
+  // Capture-phase listener fires BEFORE LinkedIn's own handlers. Only the
+  // immediate clicked element is inspected — parent chain explicitly NOT
+  // walked. Avoids the false-positive that blocked the Next button.
+  document.addEventListener('click', (e) => {
+    if (window.__copilotSubmitUnlocked) return;
+    if (isSubmit(e.target) || isSubmit(e.target.closest('button, a'))) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      const banner = document.getElementById('__copilot-banner');
+      if (banner) banner.style.background = '#fef2f2';
+      alert('🔒 Co-pilot has blocked Submit. Click the Unlock button (top of the page) first.');
+      return;
+    }
+  }, true);
+
+  // Floating banner — Submit lock state + Re-autofill action button.
+  const banner = document.createElement('div');
+  banner.id = '__copilot-banner';
+  banner.style.cssText = `
+    position: fixed; top: 0; left: 0; right: 0; z-index: 2147483647;
+    background: #fffbeb; color: #92400e; padding: 8px 14px;
+    font: 600 13px -apple-system, system-ui, sans-serif;
+    border-bottom: 2px solid #f59e0b;
+    display: flex; align-items: center; gap: 12px;
+  `;
+  banner.innerHTML = `
+    <span id="__copilot-status">🔒 Co-pilot — Submit blocked. Review fields, then click Unlock when ready to submit.</span>
+    <button id="__copilot-refill" style="
+      margin-left:auto; padding: 4px 12px; border-radius: 6px;
+      background: #1e40af; color: white; border: none;
+      font: 600 12px -apple-system; cursor: pointer;
+    ">🤖 Re-autofill this step</button>
+    <button id="__copilot-unlock" style="
+      padding: 4px 12px; border-radius: 6px;
+      background: #92400e; color: white; border: none;
+      font: 600 12px -apple-system; cursor: pointer;
+    ">Unlock Submit</button>
+  `;
+  document.body.appendChild(banner);
+
+  document.getElementById('__copilot-unlock').addEventListener('click', () => {
+    window.__copilotSubmitUnlocked = true;
+    banner.style.background = '#dcfce7';
+    banner.style.borderBottomColor = '#16a34a';
+    banner.style.color = '#14532d';
+    document.getElementById('__copilot-status').innerText = '🔓 Submit unlocked. Co-pilot will not interfere.';
+    document.getElementById('__copilot-unlock').remove();
+  });
+
+  // Re-autofill: just sets a flag. The Python loop polls this every 500ms
+  // and re-runs the autofill walker on the currently-visible step.
+  document.getElementById('__copilot-refill').addEventListener('click', () => {
+    window.__copilotRefillRequested = true;
+    const refillBtn = document.getElementById('__copilot-refill');
+    const orig = refillBtn.innerText;
+    refillBtn.innerText = '⏳ Filling…';
+    refillBtn.disabled = true;
+    setTimeout(() => { refillBtn.innerText = orig; refillBtn.disabled = false; }, 1500);
+  });
+})();
+"""
+
+
+def _install_submit_block(page: Page) -> None:
+    """Inject capture-phase click interceptor that blocks Submit clicks +
+    a floating banner with [🤖 Re-autofill this step] and [Unlock Submit]
+    buttons. Survives DOM rerenders because the banner is appended to body
+    and the listener stays attached to document."""
+    try:
+        page.evaluate(_SUBMIT_BLOCK_JS)
+        log.info("submit-block installed — interceptor + Re-autofill + Unlock buttons")
+    except Exception as e:  # noqa: BLE001
+        log.warning("submit-block injection failed: %s", e)
+
+
+def _wait_for_user_action(page: Page, timeout_seconds: int = 3600) -> str:
+    """Poll the page every 500ms for either:
+      - user clicked the Re-autofill button → returns 'refill'
+      - user closed the tab/window → returns 'close'
+      - timeout (default 1h) → returns 'timeout'
+    """
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        try:
+            if page.is_closed():
+                return "close"
+            flag = page.evaluate("window.__copilotRefillRequested === true")
+            if flag:
+                page.evaluate("window.__copilotRefillRequested = false")
+                return "refill"
+        except Exception:  # noqa: BLE001 — page might be closing
+            return "close"
+        time.sleep(0.5)
+    return "timeout"
+
+
 def _wait_for_login(page: Page, max_seconds: int = 600) -> None:
     """Block until the page navigates off /login. Gives the user up to 10
     minutes to type credentials + handle 2FA."""
@@ -115,12 +281,50 @@ def _wait_for_login(page: Page, max_seconds: int = 600) -> None:
 
 
 def _click_easy_apply(page: Page) -> bool:
-    """Try each known selector for the Easy Apply button. Returns True on
-    successful click."""
+    """Try each known selector for the Easy Apply button/link. Wait up to
+    15s total for ANY of them to render — LinkedIn's React SPA hydrates the
+    apply target asynchronously after URL change. Returns True on success.
+
+    LinkedIn currently renders Easy Apply in TWO different ways depending
+    on whether the user is rolled into the new SDUI flow:
+      - Legacy: <button class='jobs-apply-button'>...
+      - SDUI:   <a href='.../apply/?openSDUIApplyFlow=true' aria-label='Easy Apply to this job'>...
+    Hashed CSS-module class names ("_41df6e23"…) rotate often so are
+    unusable; aria-label + visible text are the only stable hooks.
+    """
+    combined = (
+        # SDUI anchor (current as of 2026-04-30)
+        "a[aria-label*='Easy Apply'], "
+        "a[aria-label^='Easy Apply'], "
+        "a[href*='/apply/'][aria-label*='Easy Apply'], "
+        # Legacy button
+        "button.jobs-apply-button:has-text('Easy Apply'), "
+        "button[aria-label*='Easy Apply'], "
+        "button[aria-label^='Easy Apply'], "
+        "button.jobs-apply-button, "
+        "button:has-text('Easy Apply'), "
+        ".jobs-apply-button--top-card button, "
+        "button[data-control-name*='easy_apply']"
+    )
+    try:
+        page.wait_for_selector(combined, state="visible", timeout=15_000)
+    except PlaywrightTimeout:
+        log.warning("Easy Apply target never rendered after 15s — leaving page open for manual apply")
+        return False
+
     selectors = [
-        "button.jobs-apply-button",
+        # SDUI anchor — most specific first
+        "a[aria-label='Easy Apply to this job']",
+        "a[aria-label^='Easy Apply']",
+        "a[aria-label*='Easy Apply']",
+        # Legacy button variants
+        "button.jobs-apply-button:has-text('Easy Apply')",
+        "button[aria-label^='Easy Apply']",
         "button[aria-label*='Easy Apply']",
-        "button:has-text('Easy Apply')",
+        ".jobs-apply-button--top-card button",
+        "button.jobs-apply-button",
+        # Last-resort text match (covers either a or button)
+        "button:has-text('Easy Apply'), a:has-text('Easy Apply')",
     ]
     for sel in selectors:
         try:
@@ -129,11 +333,15 @@ def _click_easy_apply(page: Page) -> bool:
                 continue
             btn.scroll_into_view_if_needed(timeout=3000)
             btn.click(timeout=4000)
-            page.wait_for_timeout(1500)  # let modal animate in
-            log.info("clicked easy-apply via %s", sel)
+            # SDUI anchor navigates to a new URL; legacy button opens a modal.
+            # Either way, give the apply form 2.5s to hydrate before we start
+            # introspecting questions.
+            page.wait_for_timeout(2500)
+            log.info("clicked Easy Apply via %s", sel)
             return True
         except Exception as e:  # noqa: BLE001 — best-effort
             log.debug("selector %s failed: %s", sel, e)
+    log.warning("Easy Apply target rendered but no selector clicked — markup may have shifted again")
     return False
 
 
@@ -178,11 +386,7 @@ def _autofill_easy_apply_modal(
     for i in range(n):
         try:
             grp = questions.nth(i)
-            label_text = ""
-            try:
-                label_text = grp.locator("label, span.fb-form-element-label__text").first.inner_text(timeout=1500).strip()
-            except Exception:  # noqa: BLE001
-                continue
+            label_text = _extract_question_label(grp)
             if not label_text:
                 continue
             answer = _resolve_answer(label_text, profile, role=role, company=company)
@@ -231,6 +435,81 @@ def _autofill_easy_apply_modal(
             continue
 
     return filled
+
+
+# ── question label extraction ────────────────────────────────────────
+
+
+# Texts that are usually radio OPTION labels, not the question heading.
+# When _extract_question_label sees these as the "first label", it should
+# look further up for the real question.
+_OPTION_TEXT_TOKENS = {
+    "yes", "no", "decline to self-identify", "prefer not to answer",
+    "i prefer not to answer", "i decline", "decline",
+}
+
+
+def _extract_question_label(grp: Any) -> str:
+    """Pull the actual question heading from a form-section grouping.
+
+    Prior version grabbed `label, span.fb-form-element-label__text` first
+    — for radio groups (`Do you have X? [Yes / No]`) that returns the
+    radio option's text ("Yes"), not the question. This caused 8 questions
+    on the WaferWire run to be skipped as `unrecognised question`.
+
+    Strategy (most reliable first):
+      1. <legend> inside a <fieldset> (semantic HTML for radio groups)
+      2. LinkedIn's own heading classes (t-bold / form-element heading)
+      3. Element with role='heading' or any <h*>
+      4. First <label> / <span> whose text is NOT a known option token
+    """
+    # 1. legend (the most reliable heading element for radio groups)
+    try:
+        legend = grp.locator("legend").first
+        if legend.count() > 0:
+            text = legend.inner_text(timeout=800).strip()
+            if text and text.lower() not in _OPTION_TEXT_TOKENS:
+                return text
+    except Exception:  # noqa: BLE001
+        pass
+
+    # 2. LinkedIn's heading class hooks (stable on Easy Apply since at
+    # least 2024). t-bold is the typography utility for question headings.
+    for sel in (
+        "span.fb-form-element-label__text",
+        "span.t-bold",
+        "[data-test-text-selectable-option__label]",
+        "[role='heading']",
+        "h3, h4",
+    ):
+        try:
+            el = grp.locator(sel).first
+            if el.count() > 0:
+                text = el.inner_text(timeout=800).strip()
+                if text and text.lower() not in _OPTION_TEXT_TOKENS and len(text) > 2:
+                    return text
+        except Exception:  # noqa: BLE001
+            continue
+
+    # 3. Last resort: first non-trivial label or span. Skip option tokens
+    # ("Yes", "No"). Also skip very short strings that are likely options.
+    try:
+        for sel in ("label", "span"):
+            elements = grp.locator(sel)
+            n = elements.count()
+            for i in range(min(n, 6)):
+                try:
+                    text = elements.nth(i).inner_text(timeout=500).strip()
+                except Exception:  # noqa: BLE001
+                    continue
+                if not text or text.lower() in _OPTION_TEXT_TOKENS:
+                    continue
+                if len(text) <= 2:
+                    continue
+                return text
+    except Exception:  # noqa: BLE001
+        pass
+    return ""
 
 
 # ── question → answer resolver ────────────────────────────────────────
@@ -300,6 +579,24 @@ def _resolve_answer(question: str, p: Profile, *, role: str, company: str) -> An
             if stack in q:
                 return p.years_for(stack)
         return p.get("experience", "total_years")
+
+    # Yes/No: "Do you have experience with X?" / "Are you familiar with X?"
+    # / "Strong exp on Y" / "Have you worked with Z?". Cross-reference the
+    # question against the user's `skills_yes_keywords` (positive claims)
+    # and `skills_no_keywords` (explicit no-answers). Anything ambiguous
+    # falls through to None so the user fills it manually.
+    yes_no_signals = ("experience" in q or "familiar" in q or "worked with" in q
+                       or "ability to" in q or "strong exp" in q or "knowledge of" in q
+                       or "exposure to" in q or "comfortable with" in q
+                       or "have you" in q or "do you have" in q)
+    if yes_no_signals:
+        skills_yes = [s.lower() for s in (p.raw.get("skills_yes_keywords") or [])]
+        skills_no = [s.lower() for s in (p.raw.get("skills_no_keywords") or [])]
+        if any(skill in q for skill in skills_yes):
+            return "Yes"
+        if any(skill in q for skill in skills_no):
+            return "No"
+        # No skill match — let the user answer manually rather than guess.
 
     # EEO / demographics — return decline if user opted out.
     if "gender" in q:

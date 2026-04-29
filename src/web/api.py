@@ -31,7 +31,7 @@ from pydantic import BaseModel, Field
 
 from lib.config import load_env
 from sheet import schema
-from sheet.client import SheetClient
+from sheet.client import SheetClient, now_iso
 
 from . import bot_health
 from .cache import TTLCache
@@ -687,6 +687,19 @@ def retailor_with_feedback(job_id: str, payload: RetailorRequest, request: Reque
     instruction_text += (
         " Edit resume.md in-place to address this feedback specifically. "
         "Do not regenerate the same content — improve along the feedback dimension. "
+        # Pages-disambiguation: prior runs misread "make it 2 pages" as a
+        # target to expand TO rather than a ceiling to compress UNDER. Pin
+        # the interpretation so any page-count instruction is always a
+        # hard upper bound + always implies trimming, never expansion.
+        "IMPORTANT: if the user mentions a page count (e.g. '2 pages', "
+        "'one page', 'fits on a page'), treat it strictly as a HARD UPPER "
+        "BOUND. If the current resume is already at or below that count, "
+        "leave length alone and focus on the other parts of the feedback. "
+        "If it exceeds the bound, COMPRESS — cut the least-JD-aligned "
+        "bullets, drop projects irrelevant to this role, tighten prose. "
+        "NEVER expand a shorter resume to fill a stated page target. "
+        "After editing, render to PDF mentally — if you suspect the page "
+        "count still exceeds the bound, cut more before finishing. "
         "After editing, write a one-line summary of the changes to last_change.txt."
     )
     sidecar_path = wrapper_dir / f"{safe_id}.json"

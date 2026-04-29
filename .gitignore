@@ -31,3 +31,8 @@ docs/.docs-sync-last.txt
 # `_bmad/custom/config.user.toml` is the long-lived override surface.
 _bmad/config.user.toml
 _bmad/custom/config.user.toml
+
+# Graphify outputs — regenerable from `/graphify .` (bytes are large and
+# change every run; don't commit). The skill caches under graphify-out/
+# and writes the interactive HTML + GraphRAG JSON + audit report there.
+graphify-out/

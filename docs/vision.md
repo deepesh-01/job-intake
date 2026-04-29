@@ -1,6 +1,21 @@
 # Job Intake — Product Vision (v2, post-MVP)
 
-*Owner: Deepesh · Status: shipped + extending · Last updated: 2026-04-27*
+*Owner: Deepesh · Status: shipped + extending · Last updated: 2026-04-29*
+
+---
+
+## North-star metric — apps submitted / week
+
+The single number this product is optimizing for is **applications submitted per week** — rows that reach `status=applied`. Not swipe-right rate, not rows fetched, not unique-companies-discovered, not relevance %. Those are inputs and diagnostics; *apps/week* is the output that tracks whether the funnel is doing its job.
+
+Adopted 2026-04-29 per the brainstorming artifact at `_bmad-output/planning-artifacts/brainstorming/next-actions-brainstorm-2026-04-29.md`. The user's bottleneck is **attention**, not supply (the 15-min morning swipe budget is load-bearing). Future changes are graded on whether they raise apps/week, not whether they raise the queue size or the relevance ratio.
+
+Operational corollaries:
+- Adding a new source is justified only if it lifts apps/week, not if it lifts row count.
+- Filters/excludes are justified by the inverse: removing rows that would never become apps is a *gain*, not a loss.
+- Per-source `relevance_yield` (apps + tailor + ready / fetched) is the ranking signal we'll instrument next.
+
+---
 
 > Sibling docs:
 > - [`how-to-journey.md`](./how-to-journey.md) — operational guide

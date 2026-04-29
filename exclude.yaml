@@ -15,13 +15,105 @@ excluded_companies:
   - { name: "tcs",       aliases: ["tata consultancy", "tcs "] }
   - { name: "infosys",   aliases: ["infosys"] }
   - { name: "wipro",     aliases: ["wipro"] }
-  - { name: "hcl",       aliases: ["hcl tech", "hcl technologies"] }
+  - { name: "hcl",       aliases: ["hcl tech", "hcl technologies", "hcltech"] }
   - { name: "cognizant", aliases: ["cognizant"] }
   - { name: "capgemini", aliases: ["capgemini"] }
   - { name: "accenture", aliases: ["accenture"] }
   - { name: "deloitte",  aliases: ["deloitte"] }
   - { name: "ltimindtree", aliases: ["ltimindtree", "lti mindtree"] }
   - { name: "tech mahindra", aliases: ["tech mahindra"] }
+
+  # Heavy-industrial / non-software-tech (added 2026-04-29 after QC audit
+  # found "Senior Engineer" at these = mechanical/civil/chemical/etc.)
+  - { name: "larsen & toubro", aliases: ["larsen & toubro", "larsen and toubro", "l&t"] }
+  - { name: "reliance",  aliases: ["reliance industries", "reliance jio"] }
+  - { name: "saint-gobain", aliases: ["saint-gobain", "saint gobain"] }
+  - { name: "abb",       aliases: ["abb "] }
+  - { name: "ge vernova", aliases: ["ge vernova"] }
+  - { name: "aecom",     aliases: ["aecom"] }
+  - { name: "stantec",   aliases: ["stantec"] }
+  - { name: "schneider electric", aliases: ["schneider electric"] }
+  - { name: "tata electronics", aliases: ["tata electronics"] }
+  - { name: "sun pharma", aliases: ["sun pharma", "sun pharmaceutical"] }
+  - { name: "dr. reddy's", aliases: ["dr. reddy", "dr reddy", "drreddy"] }
+  - { name: "williams refrigeration", aliases: ["williams refrigeration"] }
+  - { name: "bajaj allianz", aliases: ["bajaj allianz"] }
+  - { name: "bliss aerospace", aliases: ["bliss aerospace"] }
+  - { name: "ferra aerospace", aliases: ["ferra aerospace"] }
+  - { name: "jamco",     aliases: ["jamco america"] }
+  - { name: "wave mechanics", aliases: ["wave mechanics"] }
+  - { name: "sanjay polymers", aliases: ["sanjay polymers"] }
+  - { name: "intertek",  aliases: ["intertek"] }
+  - { name: "info edge", aliases: ["info edge"] }   # Naukri's parent — voice-process roles
+  - { name: "247 virtual assistant", aliases: ["247 virtual assistant"] }
+  - { name: "people alliance", aliases: ["people alliance workforce"] }
+  - { name: "imaginators try going", aliases: ["imaginators try going"] }
+  - { name: "kishori education", aliases: ["kishori education"] }
+  - { name: "rprocess outsourcing", aliases: ["rprocess outsourcing"] }
+  - { name: "creative m portals", aliases: ["creative m portals"] }
+  - { name: "iapwe",     aliases: ["iapwe"] }       # Freelance writers
+  - { name: "imperialplatforms", aliases: ["imperialplatforms"] }
+  - { name: "vp education group", aliases: ["vp education group"] }
+  - { name: "evergreen seamless", aliases: ["evergreen seamless"] }
+  - { name: "cre spacez", aliases: ["cre spacez"] }
+  - { name: "calpion",   aliases: ["calpion"] }
+  - { name: "bayone",    aliases: ["bayone techno"] }
+  - { name: "fairmont",  aliases: ["fairmont hotels"] }
+  - { name: "advizex",   aliases: ["advizex"] }
+  - { name: "weekday",   aliases: ["weekday"] }     # Tax AI Expert / freelance gig site
+  - { name: "247 virtual", aliases: ["247 virtual"] }
+  - { name: "headlight", aliases: ["headlight"] }   # Learning & Dev
+  - { name: "renaissance learning", aliases: ["renaissance learning"] }
+  - { name: "alimentiv", aliases: ["alimentiv"] }   # clinical research
+  - { name: "diversified radiology", aliases: ["diversified radiology"] }
+  - { name: "brave health", aliases: ["brave health"] }
+  - { name: "evry health", aliases: ["evry health"] }
+  - { name: "imagine pediatrics", aliases: ["imagine pediatrics"] }
+  - { name: "oruka",     aliases: ["oruka therapeutics"] }
+  - { name: "cranial technologies", aliases: ["cranial technologies"] }
+  - { name: "wells fargo", aliases: ["wells fargo"] }
+  - { name: "bridgewater", aliases: ["bridgewater associates"] }
+  - { name: "intrafi",   aliases: ["intrafi"] }
+  - { name: "uasi",      aliases: ["uasi"] }
+  - { name: "vidinext",  aliases: ["vidinext"] }
+  - { name: "enablecomp", aliases: ["enablecomp"] }
+  - { name: "cordance",  aliases: ["cordance"] }
+  - { name: "bold business", aliases: ["bold business"] }
+  - { name: "mindrift",  aliases: ["mindrift"] }   # freelance gig site
+  - { name: "iapwe",     aliases: ["iapwe"] }
+  - { name: "linkedin",  aliases: ["linkedin"] }   # LinkedIn-as-employer Sales/Mktg roles
+
+  # ── Round 5 (2026-04-29 — Hirist audit) — curated body-shop blocklist ──
+  # Companies surfaced by Hirist that pattern-matched as eng but are body-shops
+  # / staffing firms / IT-services consultancies in the same vein as TCS/Infosys.
+  # Triaged by name + type — kept legit product cos (HealthEdge, Agoda, QuEST,
+  # Accion Labs, Nineleaps, InfoCepts, Draup) explicitly out of this list.
+  - { name: "cgi",                  aliases: ["cgi information systems", "cgi inc"] }
+  - { name: "sigma allied",         aliases: ["sigma allied services"] }
+  - { name: "uplers",                aliases: ["uplers solutions"] }
+  - { name: "orangemint",            aliases: ["orangemint technologies"] }
+  - { name: "del cap",               aliases: ["del cap managed services"] }
+  - { name: "miracle software",      aliases: ["miracle software systems"] }
+  - { name: "crossdev",              aliases: ["crossdev technologies"] }
+  - { name: "vintronics",            aliases: ["vintronics consulting"] }
+  - { name: "vueverse",              aliases: ["vueverse consulting"] }
+  - { name: "netsyscon",             aliases: ["netsyscon"] }
+  - { name: "innovya",               aliases: ["innovya technologies"] }
+  - { name: "nexionpro",             aliases: ["nexionpro services"] }
+  - { name: "cantik",                aliases: ["cantik technologies"] }
+  - { name: "majoris",               aliases: ["majoris technologies"] }
+  - { name: "scaling theory",        aliases: ["scaling theory technologies"] }
+  - { name: "mnr solutions",         aliases: ["mnr solutions"] }
+  - { name: "vayuz",                 aliases: ["vayuz technologies"] }
+  - { name: "nexis hr",              aliases: ["nexis hr"] }
+  - { name: "pan asia hr",           aliases: ["pan asia hr"] }
+  - { name: "think people",          aliases: ["think people solutions"] }
+  - { name: "svan global",           aliases: ["svan global consultancy"] }
+  - { name: "all about people",      aliases: ["it's all about people", "all about people consulting"] }
+  - { name: "kbd talent",            aliases: ["kbd talent forge"] }
+  - { name: "futures and careers",   aliases: ["futures and careers"] }
+  - { name: "talent pro",            aliases: ["talent pro"] }
+  - { name: "worksconsultancy",      aliases: ["worksconsultancy"] }
 
 # JD body or company description keyword exclusions.
 # If ANY of these match, the row is dropped.
@@ -58,3 +150,349 @@ excluded_keywords:
 excluded_company_patterns:
   - ".*(consulting|consultancy|services|solutions) (pvt|private) ltd.*"
   - ".*(it services|it consulting|software services).*"
+  # Round 5 (2026-04-29 — Hirist audit) — body-shop / staffing / HR-consultancy
+  # patterns that hide the end-employer. Calibrated against observed Hirist bloat;
+  # legit product cos with similar names (HealthEdge, Agoda, QuEST, Accion, Nineleaps,
+  # InfoCepts, Draup) are explicitly NOT matched by these patterns.
+  - "(?i).*\\bhr\\s+(consulting|solutions|consultancy)\\b.*"          # Pan Asia HR, Nexis HR
+  - "(?i).*\\btalent\\s+(forge|partners|connect|search|hunt)\\b.*"   # KBD Talent Forge
+  - "(?i).*\\b(staffing|placement|manpower|workforce)\\b.*"
+  - "(?i).*\\bconsulting\\s+llp\\b.*"                                  # NETSYSCON CONSULTING LLP
+  - "(?i).*\\bglobal consultancy\\b.*"                                 # svan global consultancy
+  - "(?i).*\\bpeople\\s+(consulting|solutions)\\b.*"                  # It's All About People, Think People Solutions
+
+# Role-title patterns (case-insensitive). If ANY matches the role, drop.
+# Keeps the funnel software-engineering only. Naukri's keyword search is
+# loose ("senior engineer" pulls civil/mechanical/construction); LinkedIn
+# returns sales/marketing/HR roles tangential to query terms; the
+# greenhouse/ashby boards include the company's full hiring page across
+# all departments. Calibrated 2026-04-29 against observed bloat in
+# `status=new` (40 non-eng / 500 visible).
+
+excluded_role_patterns:
+  # Sales & GTM
+  - "(?i)\\bsales\\b"                 # Sales Manager, Sales Engineer, Sales Ops
+  - "(?i)\\baccount executive\\b"
+  - "(?i)\\baccount manager\\b"
+  - "(?i)\\bbusiness development\\b"
+  - "(?i)pre[\\- ]?sales"
+  - "(?i)\\bbdr\\b"
+  - "(?i)\\bsdr\\b"
+  - "(?i)inside sales"
+  - "(?i)solutions engineer"          # almost always pre-sales at scaled cos
+  - "(?i)customer success"
+  - "(?i)partner manager"
+
+  # Marketing
+  - "(?i)\\bmarketing\\b"
+  - "(?i)demand generation"
+  - "(?i)growth manager"
+  - "(?i)brand manager"
+  - "(?i)\\bpr manager\\b"
+  - "(?i)content writer"
+  - "(?i)copywriter"
+
+  # HR / People / Recruiting
+  - "(?i)\\brecruiter\\b"
+  - "(?i)talent acquisition"
+  - "(?i)human resources"
+  - "(?i)\\bhr manager\\b"
+  - "(?i)\\bhr business partner\\b"
+  - "(?i)\\bhr generalist\\b"
+  - "(?i)people partner"
+
+  # Legal & Compliance
+  - "(?i)\\blegal\\b"
+  - "(?i)\\bparalegal\\b"
+  - "(?i)\\battorney\\b"
+  - "(?i)\\bcounsel\\b"
+  - "(?i)compliance officer"
+
+  # Finance / Accounting
+  - "(?i)\\baccountant\\b"
+  - "(?i)chartered accountant"
+  - "(?i)financial analyst"
+  - "(?i)finance manager"
+  - "(?i)tax manager"
+  - "(?i)\\baudit(?:or)?\\b"
+  - "(?i)\\baccounts payable\\b"
+  - "(?i)equity admin"
+
+  # Admin / Ops (non-engineering)
+  - "(?i)administrative business partner"
+  - "(?i)office administrator"
+  - "(?i)executive assistant"
+  - "(?i)\\breceptionist\\b"
+  - "(?i)logistics"
+  - "(?i)supply chain"
+  - "(?i)\\bprocurement\\b"
+  - "(?i)warehouse"
+
+  # Non-software engineering disciplines (Naukri "engineer" search bloat)
+  - "(?i)civil engineer"
+  - "(?i)mechanical engineer"
+  - "(?i)electrical engineer"
+  - "(?i)chemical engineer"
+  - "(?i)instrumentation engineer"
+  - "(?i)maintenance engineer"
+  - "(?i)production engineer"
+  - "(?i)safety engineer"
+  - "(?i)sales engineer"               # already covered by sales but explicit
+  - "(?i)field engineer"
+
+  # Other non-eng
+  - "(?i)\\bdoctor\\b"
+  - "(?i)\\bnurse\\b"
+  - "(?i)\\bteacher\\b"
+  - "(?i)\\bprofessor\\b"
+  - "(?i)\\bchef\\b"
+  - "(?i)driver"
+
+  # ── Round 2 (added 2026-04-29 after QC audit) ──
+
+  # Data science / analytics (user wants software engineering, NOT data science)
+  - "(?i)\\bdata scientist\\b"
+  - "(?i)\\bdecision scientist\\b"
+  - "(?i)\\bdata analyst\\b"
+  - "(?i)\\bbusiness analyst\\b"
+  - "(?i)\\brisk analyst\\b"
+  - "(?i)\\b(investment|portfolio|equity|credit|investor|wealth|treasury)\\s+analyst\\b"
+  - "(?i)\\banalyst\\s*[-–]\\s*"        # "Analyst - X" titles
+  - "(?i)\\bquant\\b"
+  - "(?i)\\bquantitative analyst\\b"
+  - "(?i)\\bsettlement analyst\\b"
+  - "(?i)\\bpayout\\b"
+
+  # Marketers / Strategists (boundary fix — `Marketer` not just `marketing`)
+  - "(?i)\\bmarketer\\b"
+  - "(?i)\\bgrowth marketer\\b"
+  - "(?i)\\bstrategist\\b"
+  - "(?i)\\bstrategy\\s+(consultant|manager|lead|director)\\b"
+  - "(?i)digital media strategy"
+  - "(?i)digital media strategist"
+  - "(?i)\\bppc\\b"                     # Pay-Per-Click
+  - "(?i)\\bseo\\b"
+  - "(?i)\\benablement\\b"              # Sales/Customer Enablement Manager
+  - "(?i)\\bproposal manager\\b"
+  - "(?i)solutions strategy"
+  - "(?i)digital strategy"
+  - "(?i)go[-\\s]?to[-\\s]?market"
+  - "(?i)\\bgtm\\s+(manager|lead|engineer|director)\\b"
+
+  # Finance specialty / risk / controllership
+  - "(?i)\\bcontrollership\\b"
+  - "(?i)\\bcontroller\\b"
+  - "(?i)\\bORM\\b"                     # Operational Risk Management
+  - "(?i)operational risk management"
+  - "(?i)portfolio specialist"
+  - "(?i)\\bfpna?\\b"                   # FPNA / FP&A
+  - "(?i)financial planning"
+  - "(?i)\\baccounts?\\s+(payable|receivable|manager)\\b"
+  - "(?i)\\bbookkeeper\\b"
+
+  # Interns / Trainees / Freshers (user is senior IC)
+  - "(?i)\\bintern(ship)?\\b"
+  - "(?i)\\btrainee\\b"
+  - "(?i)\\bfresher"
+  - "(?i)\\bgrad intern\\b"
+  - "(?i)\\bnew grad\\b"
+
+  # Content / social / writer roles
+  - "(?i)\\bcontent\\s*[-–]\\s*"        # "Content - Intern", "Content - Editor"
+  - "(?i)\\bcontent (writer|editor|associate|specialist|manager|strategist|intern)\\b"
+  - "(?i)\\bsocial media\\b"
+  - "(?i)\\bcommunity manager\\b"
+  - "(?i)\\bwriter\\b"
+  - "(?i)\\bcopywriter\\b"
+  - "(?i)\\bjournalist\\b"
+
+  # Business / partnerships / regional / category leads (non-software)
+  - "(?i)\\bbusiness partnership\\b"
+  - "(?i)\\bpartnership(s)?\\b"
+  - "(?i)\\balliances\\b"
+  - "(?i)\\bregional lead\\b"
+  - "(?i)\\bregional manager\\b"
+  - "(?i)\\bclient onboarding\\b"
+  - "(?i)customer onboarding"
+  - "(?i)customer interaction"
+
+  # Product / Program / Project Managers (user is IC)
+  - "(?i)\\bproduct manager\\b"
+  - "(?i)\\bproduct management\\b"
+  - "(?i)\\btechnical program manager\\b"
+  - "(?i)\\btpm\\b"
+  - "(?i)\\bproject manager\\b"
+  - "(?i)\\bproject leader\\b"
+  - "(?i)\\bscrum master\\b"
+
+  # Director / Head / VP of business functions (not software eng leadership)
+  - "(?i)\\b(director|head|vp)\\s+(of\\s+)?(strategy|consulting|business|operations|sales|marketing|hr|finance|growth|enablement)\\b"
+  - "(?i)managing director\\b"
+  - "(?i)\\bcategory (head|manager|lead)\\b"
+
+  # Designer (user explicitly software-eng, not design)
+  - "(?i)\\b(ux|ui|user\\s+experience)\\s+designer\\b"
+  - "(?i)\\bproduct designer\\b"
+  - "(?i)\\bvisual designer\\b"
+  - "(?i)\\bproduction designer\\b"
+  - "(?i)\\binterior design"
+  - "(?i)\\bgraphic designer\\b"
+
+  # Medical / healthcare
+  - "(?i)\\b(clinical\\s+)?social\\s+work(er)?\\b"
+  - "(?i)\\bradiologist\\b"
+  - "(?i)\\bmedical director\\b"
+  - "(?i)\\bcare team\\b"
+  - "(?i)medical (assistant|specialist|representative)"
+  - "(?i)\\boutpatient\\b"
+  - "(?i)\\benrollment specialist\\b"
+  - "(?i)insurance verification"
+  - "(?i)\\b(neuro)?radiologist\\b"
+  - "(?i)scientific communications"
+  - "(?i)publications manager"
+  - "(?i)\\bcoder\\b"                   # medical coder
+  - "(?i)\\bbpo\\b"
+  - "(?i)voice process"
+
+  # "Tax X" non-finance specialists, freelance gig-style
+  - "(?i)\\btax\\s+(ai\\s+)?expert\\b"
+  - "(?i)\\bfreelance\\s+(writer|agent|evaluator)\\b"
+
+  # Non-software engineering disciplines (heavier cover than round 1)
+  - "(?i)\\bcivil\\s+engineer"
+  - "(?i)\\bmechanical\\s+engineer"
+  - "(?i)\\belectrical\\s+engineer"
+  - "(?i)\\bchemical\\s+engineer"
+  - "(?i)\\binstrumentation\\s+engineer"
+  - "(?i)\\bmaintenance\\s+(engineer|manager)"
+  - "(?i)\\bproduction\\s+engineer"
+  - "(?i)\\bsafety\\s+engineer"
+  - "(?i)\\bfield\\s+(engineer|service)"
+  - "(?i)\\bservice engineer\\b"
+  - "(?i)\\bnpd\\s+(engineer|project)"
+  - "(?i)\\bnpi\\s+engineer\\b"
+  - "(?i)\\bdesign\\s+engineer\\b"      # 99% non-software when standalone
+  - "(?i)\\bplant\\s+engineer\\b"
+  - "(?i)\\bcomponent\\s+engineer\\b"
+  - "(?i)\\bhardware\\s+engineer\\b"
+  - "(?i)\\bautocad\\b"
+  - "(?i)\\bcam\\s+programmer\\b"
+  - "(?i)\\bcnc\\b"
+  - "(?i)\\bnc\\s+programmer\\b"
+  - "(?i)\\bemi/?emc\\b"
+  - "(?i)\\b(mvlv|mep|hvac)\\b"
+  - "(?i)\\bstructural\\s+engineer"
+  - "(?i)\\bprocess\\s+(design|engineer)"
+  - "(?i)\\bhuman\\s+factors"
+  - "(?i)\\bRF\\s+DAS\\b"
+  - "(?i)\\bhydrofact"
+  - "(?i)\\b(reservoir|drilling|petroleum)\\b"
+  - "(?i)\\bsubsea\\b"
+  - "(?i)\\b(refrigeration|granulation|extrusion|moulding|molding|polymer)\\b"
+  - "(?i)\\bwastewater\\b"
+  - "(?i)blow molding"
+  - "(?i)stem and robotics trainer"
+  - "(?i)\\bstores\\s+eng"              # Stores Eng (Reliance)
+  - "(?i)\\bstructural engineering\\b"
+
+  # Misc filler / spam
+  - "(?i)\\bvirtual assistant\\b"
+  - "(?i)walk[-\\s]?in\\b"              # Walk-in interview drives (low-quality)
+  - "(?i)\\bteam member\\b"             # Pharma "Team Member - Engineering"
+  - "(?i)\\bproposal manager\\b"
+  - "(?i)\\bretail manager\\b"
+  - "(?i)\\bhardline\\b"
+  - "(?i)\\bsoftline\\b"
+  - "(?i)overseas education consultant"
+  - "(?i)study abroad"
+  - "(?i)\\b(maintenance|production|operations)\\s+(supervisor|manager)\\b"
+
+  # Specialist (only specific non-tech variants — bare "Specialist" is too broad)
+  - "(?i)(insurance|enrollment|revenue|hardline|imaging|maintenance|interior|production|publications|reimbursement|coding|verification|implementation)\\s+specialist"
+  - "(?i)portfolio\\s+specialist"
+  - "(?i)mep take[\\- ]?off"
+
+  # ── Round 3 (final-mile after eyeballing 213-row residual) ──
+
+  # Growth-titled roles in any word ordering (Round 2 caught Growth Manager
+  # but missed "Growth Management" and "Assistant Manager - Growth")
+  - "(?i)\\bgrowth\\s+(management|manager|marketing|lead|director)\\b"
+  - "(?i)\\b(assistant\\s+)?manager\\s*[-–]\\s*growth\\b"
+  - "(?i)\\bgrowth\\s+management\\b"
+
+  # "Senior Associate - X" / "Assistant Manager - X" with non-eng X
+  - "(?i)senior associate\\s*[-–]\\s*(content|marketing|sales|hr|legal|finance|operations|growth|brand|community)"
+  - "(?i)assistant manager\\s*[-–]\\s*(growth|sales|marketing|hr|finance|operations|content|legal|community|partnerships?)"
+
+  # ERP / CRM functional / admin roles (NOT software engineering)
+  - "(?i)\\b(sap|oracle|salesforce|peoplesoft|workday|servicenow)\\s+(functional|abap|fico|mm|sd|hcm|crm|cpq)\\b"
+  - "(?i)\\bfunctional\\s+consultant\\b"
+  - "(?i)\\bsap\\s+o2c\\b"
+  - "(?i)\\bsfmc\\b"                     # Salesforce Marketing Cloud
+  - "(?i)\\brtcdp\\b"                    # Adobe Real-Time CDP
+
+  # IT-admin / business-systems roles (not software engineering)
+  - "(?i)business\\s+(systems|technology)\\s+(engineer|architect|administrator|admin|analyst|director)"
+  - "(?i)\\bsystems\\s+administrator\\b"
+  - "(?i)\\bnetwork\\s+administrator\\b"
+  - "(?i)\\bdatabase\\s+administrator\\b"
+  - "(?i)\\bdba\\b"
+
+  # CAD / mechanical CAD automation
+  - "(?i)\\bcad\\s+(automation|backend|engineer|specialist|drafter)\\b"
+  - "(?i)mechanical\\s+cad\\b"
+
+  # Top-secret / clearance-required US gov (not India-relevant)
+  - "(?i)top secret clearance"
+  - "(?i)\\bsecret clearance\\b"
+
+  # Voice / BPO / freelance gig
+  - "(?i)voice process"
+  - "(?i)\\bagent evaluation\\b"
+  - "(?i)\\bvoice support\\b"
+
+  # ── Round 4 (2026-04-29 — strict pass after Instahyre source went live) ──
+  # User wants backend / fullstack / founding-engineer only. Tagger was
+  # already flagging Data/DevOps/ML/QA as `wrong_discipline` but keeping
+  # them; promoting to drop. Plus 6 unambiguous out-of-domain titles +
+  # broader patterns for product/finance/IT-admin variants.
+
+  # Out-of-domain — confirmed safe drops
+  - "(?i)customer support executive"
+  - "(?i)\\boptometrist\\b"
+  - "(?i)treasury solutions"
+  - "(?i)\\bcounsell?or\\b"             # Education Counsellor / Career Counselor
+  - "(?i)\\bbda\\b"                      # Business Development Associate
+  - "(?i)\\bvapt\\b"                     # Vulnerability Assessment & Pen Testing analyst
+
+  # Broader role patterns (option-3 strict; user accepts FP risk)
+  - "(?i)\\bcms specialist\\b"
+  - "(?i)\\bproduct analyst\\b"
+  - "(?i)\\b(director|head|vp)\\s+of\\s+product\\b"   # Director of Product / Search etc. (non-eng)
+  - "(?i)finance\\s+and\\s+account"      # "Finance and Account Lead"
+  - "(?i)corporate engineering"          # IT/internal-tools eng
+  - "(?i)idr maintenance"                # Identity-detection sustaining eng
+
+  # Wrong-discipline — promoted from tag-only to drop (user is backend/fullstack IC)
+  - "(?i)\\bdata\\s+engineer\\b"
+  # Broadened ML pattern — catches "Machine Learning Application Engineer",
+  # "ML Platform Engineer", "Senior ML Engineer", etc. (originally only matched
+  # the immediate "ML Engineer" / "Machine Learning Engineer" forms)
+  - "(?i)\\b(?:machine\\s+learning|ml)\\b[\\w\\s]{0,30}\\bengineer\\b"
+  - "(?i)\\bdevops\\s+(engineer|platform|specialist|architect|lead)\\b"
+  - "(?i)\\bcloud\\s+devops\\b"
+  - "(?i)\\bqa\\s+(engineer|automation)\\b"
+  - "(?i)\\bsdet\\b"                     # Software Development Engineer in Test
+
+  # ── Round 5 (2026-04-29 — Hirist audit: body-shop + junior cleanup) ──
+  # Hirist surfaces ~27% staffing-firm postings that hide the end-employer
+  # ("Pan Asia HR Solutions", "Nexis HR Consulting", etc.). User is senior IC
+  # so junior-titled roles also need filtering (existing intern/trainee/fresher
+  # rules don't catch "Junior .Net Developer").
+
+  # Junior-titled tech roles
+  - "(?i)\\bjunior\\s+(?:\\.net|java|python|node|ruby|php|swift|android|ios|backend|frontend|full[- ]?stack|qa|sde|swe|developer|engineer|programmer|software|tech|dev)\\b"
+
+  # Body-shop / staffing / HR-consultancy company-name patterns (high-confidence)
+  # NOTE: these go in excluded_company_patterns, not role patterns. Listed here
+  # for narrative cohesion; actual entries below in that block.

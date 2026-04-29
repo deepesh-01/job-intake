@@ -121,6 +121,44 @@ def test_explicit_comp_string_short_circuits():
     assert c.high == 130_000
 
 
+def test_inr_raw_rupee_range_naukri_format():
+    """Naukri's salaryDetail produces 'INR 750,000-1,500,000' (no L/lakh suffix)."""
+    c = parse("body irrelevant", explicit="INR 750,000-1,500,000")
+    assert c.currency == "INR"
+    assert c.low == 750_000
+    assert c.high == 1_500_000
+
+
+def test_inr_raw_rupee_range_above_floor():
+    c = parse("", explicit="INR 4,500,000-7,000,000")
+    assert c.currency == "INR"
+    assert c.low == 4_500_000
+    assert c.high == 7_000_000
+
+
+def test_inr_raw_rupee_range_with_rs_prefix():
+    c = parse("", explicit="Rs 2,500,000-4,500,000")
+    assert c.currency == "INR"
+    assert c.low == 2_500_000
+    assert c.high == 4_500_000
+
+
+def test_inr_raw_rupee_below_sanity_floor_rejected():
+    """Numbers under 1L (100,000) shouldn't match — guards against IDs/years."""
+    c = parse("", explicit="INR 50-100")
+    # Currency may still be detected, but low/high should not be extracted.
+    assert c.low is None
+    assert c.high is None
+
+
+def test_inr_with_unit_still_takes_priority_over_raw():
+    """When both unit-suffixed and raw forms appear, lakh/cr scaling wins."""
+    c = parse("compensation: 25-40 LPA")
+    assert c.currency == "INR"
+    assert c.low == 2_500_000
+    assert c.high == 4_000_000
+
+
 # ── Regression coverage for first-run bugs ──
 
 

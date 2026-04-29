@@ -13,6 +13,7 @@ class ExcludeRules:
     company_aliases: list[tuple[str, str]]  # (canonical_name, alias_substring)
     keyword_patterns: list[re.Pattern[str]]
     company_patterns: list[re.Pattern[str]]
+    role_patterns: list[re.Pattern[str]]
 
 
 def compile_rules(raw: dict) -> ExcludeRules:
@@ -29,7 +30,10 @@ def compile_rules(raw: dict) -> ExcludeRules:
     company_patterns = [
         re.compile(p, re.IGNORECASE) for p in raw.get("excluded_company_patterns", [])
     ]
-    return ExcludeRules(aliases, keyword_patterns, company_patterns)
+    role_patterns = [
+        re.compile(p) for p in raw.get("excluded_role_patterns", [])
+    ]
+    return ExcludeRules(aliases, keyword_patterns, company_patterns, role_patterns)
 
 
 def _has_meta(s: str) -> bool:
@@ -37,9 +41,14 @@ def _has_meta(s: str) -> bool:
 
 
 def excluded_reason(
-    company: str, jd_text: str, rules: ExcludeRules
+    company: str, jd_text: str, rules: ExcludeRules, role: str = ""
 ) -> str | None:
-    """Returns a short reason string if the row should be excluded, else None."""
+    """Returns a short reason string if the row should be excluded, else None.
+
+    `role` is the job title (Posting.role). Role-pattern exclusion is uniform
+    across sources; useful for filtering Naukri's loose keyword matches and
+    full-company-page ATSes that include sales/marketing/HR roles.
+    """
     c = (company or "").lower().strip()
     for canon, alias in rules.company_aliases:
         if alias in c:
@@ -47,6 +56,10 @@ def excluded_reason(
     for pat in rules.company_patterns:
         if pat.search(c):
             return f"company_pattern:{pat.pattern}"
+    r = (role or "").strip()
+    for pat in rules.role_patterns:
+        if pat.search(r):
+            return f"role:{pat.pattern}"
     body = jd_text or ""
     for pat in rules.keyword_patterns:
         if pat.search(body):

@@ -20,7 +20,7 @@ from typing import Any
 from lib.config import load_env, load_yaml
 from lib.logging import configure
 from lib.posting import EnrichedRow, Posting, SourceError
-from scout import dedup, exclude, extract, resume, tag
+from scout import archive, dedup, exclude, extract, location as loc_filter, resume, tag
 from scout.extract import Comp
 from sheet import schema
 from sheet.client import SheetClient, now_iso, today_iso
@@ -37,7 +37,19 @@ _SOURCE_MODULES = {
     "hasjob": "scout.sources.hasjob",
     "workday": "scout.sources.workday",
     "linkedin": "scout.sources.linkedin",
+    "linkedin_auth": "scout.sources.linkedin_auth",
+    "naukri": "scout.sources.naukri",
+    "instahyre": "scout.sources.instahyre",
+    "hirist": "scout.sources.hirist",
 }
+
+# Per-company cap (intra-batch). When N new postings come in for the same
+# company in a single scout run, keep the top-K by `resume_match` score and
+# drop the rest. Prevents a single high-volume employer (Databricks, Nvidia,
+# etc.) from flooding the new-card queue. Cross-run sheet-aware replacement
+# (replace lowest-score existing when a higher-score new arrives) is a
+# follow-on; tracked in docs/sources-roadmap.md §7.
+_PER_COMPANY_INTRA_BATCH_CAP = 7
 
 # §7.3 — first run hard cap: 7-day cutoff so the Sheet doesn't flood.
 _FIRST_RUN_CUTOFF_DAYS = 7
@@ -194,19 +206,30 @@ def main() -> int:
     # ── Follow-up sweep (always runs, idempotent) — §8.1 step 5 ──
     followups = _run_followup_sweep(sheet, today=today)
 
+    # ── Auto-archive status=skip rows so the Jobs tab stays lean ──
+    # Wrapped: archive failure must not fail the scout run. The archive is
+    # idempotent and failure-safe (writes destination tabs before clearing
+    # source) — worst case we retry tomorrow.
+    archived = 0
+    try:
+        archived = archive.archive_skip_rows(sheet, log=log)
+    except Exception as e:
+        log.warning("scout_archive_failed", err=str(e)[:200])
+
     # ── Log summary ──
     sheet.append_log(
         now_iso(),
         "scout",
         "finished",
-        f"inserted={inserted} followups={followups} boards={len(boards)} "
-        f"errored={sum(1 for b in board_results if b.error)}",
+        f"inserted={inserted} followups={followups} archived={archived} "
+        f"boards={len(boards)} errored={sum(1 for b in board_results if b.error)}",
     )
     truncated = sheet.truncate_log(keep_days=30)
     log.info(
         "scout_finished",
         inserted=inserted,
         followups=followups,
+        archived=archived,
         log_truncated=truncated,
     )
     return 0
@@ -234,14 +257,17 @@ def _enrich_one(
     if not p.jd_html and not p.role:
         return None
     jd_text = extract.html_to_text(p.jd_html)
-    if len(jd_text) < 200 and source_type not in {"hn_hiring", "workday", "linkedin"}:
+    if len(jd_text) < 200 and source_type not in {
+        "hn_hiring", "workday", "linkedin", "linkedin_auth", "naukri", "instahyre",
+    }:
         # HN postings are often very short by design.
         # Workday list responses don't include the JD body — only title +
         # bullet taglines, typically ~50 chars total. Body would require
         # an N+1 detail fetch per posting (slow + rate-limit risky).
         # LinkedIn cards may also have empty bodies if detail-fetch was
-        # disabled or rate-limited. We accept the lower-fidelity row and
-        # let title/location drive tags.
+        # disabled or rate-limited. Naukri search responses give a
+        # truncated description only. We accept the lower-fidelity row
+        # and let title/location drive tags.
         return None
 
     # First-run cutoff per §7.3
@@ -253,11 +279,21 @@ def _enrich_one(
         result.deduped += 1
         return None
 
-    # Exclude per §7.4
-    reason = exclude.excluded_reason(p.company, jd_text, exclude_rules)
+    # Exclude per §7.4 — company / company-pattern / role-pattern / JD-keyword
+    reason = exclude.excluded_reason(p.company, jd_text, exclude_rules, role=p.role)
     if reason:
         result.excluded += 1
         log.debug("excluded", id=p.id, reason=reason)
+        return None
+
+    # Location filter — drops non-India non-global-remote rows from sources
+    # that pull full company boards (greenhouse/ashby/workday/lever) or
+    # non-India aggregators (remoteok/remotive). India-focused sources
+    # (naukri/linkedin/etc.) bypass the filter. See src/scout/location.py.
+    loc_reason = loc_filter.location_filter_reason(p.location, jd_text, source_type)
+    if loc_reason:
+        result.excluded += 1
+        log.debug("location_filtered", id=p.id, reason=loc_reason)
         return None
 
     # Fuzzy dedup vs prior 30 days
@@ -334,21 +370,54 @@ def _safe_id(s: str) -> str:
 
 
 def _dedup_intra_batch(rows: list[EnrichedRow]) -> tuple[list[EnrichedRow], int]:
-    """Drop intra-batch fuzzy duplicates (same scout run from different sources)."""
+    """Drop intra-batch fuzzy duplicates AND cap per-company at top-K by score.
+
+    Two-pass:
+      1. Drop exact (normalize_company, normalize_role) duplicates within batch
+         (e.g. same role surfaced via greenhouse and linkedin in one run).
+      2. For each company, keep at most _PER_COMPANY_INTRA_BATCH_CAP rows,
+         ordered by resume_match descending. Rest are dropped.
+
+    Cross-run sheet-aware replacement (where a higher-score new row evicts a
+    lower-score existing row in status=new) is intentionally NOT done here —
+    it requires SheetClient extensions and lives in a follow-on change.
+    """
+    # Pass 1: exact-key dedup
     keep: list[EnrichedRow] = []
     seen_keys: set[tuple[str, str]] = set()
-    dropped = 0
+    fuzzy_dropped = 0
     for r in rows:
         key = (
             extract.normalize_company(r.posting.company),
             extract.normalize_role(r.posting.role),
         )
         if key in seen_keys:
-            dropped += 1
+            fuzzy_dropped += 1
             continue
         seen_keys.add(key)
         keep.append(r)
-    return keep, dropped
+
+    # Pass 2: per-company cap by resume_match score
+    by_company: dict[str, list[EnrichedRow]] = {}
+    for r in keep:
+        ck = extract.normalize_company(r.posting.company)
+        by_company.setdefault(ck, []).append(r)
+
+    capped: list[EnrichedRow] = []
+    cap_dropped = 0
+    for company_key, group in by_company.items():
+        if len(group) <= _PER_COMPANY_INTRA_BATCH_CAP:
+            capped.extend(group)
+            continue
+        group.sort(key=lambda r: r.resume_match, reverse=True)
+        capped.extend(group[:_PER_COMPANY_INTRA_BATCH_CAP])
+        cap_dropped += len(group) - _PER_COMPANY_INTRA_BATCH_CAP
+
+    # Preserve original order roughly (sort by their position in `keep`)
+    keep_index = {id(r): i for i, r in enumerate(keep)}
+    capped.sort(key=lambda r: keep_index.get(id(r), 0))
+
+    return capped, fuzzy_dropped + cap_dropped
 
 
 def _to_sheet_row(r: EnrichedRow) -> list[Any]:
@@ -386,6 +455,7 @@ def _to_sheet_row(r: EnrichedRow) -> list[Any]:
         "",  # response_at
         "",  # notes
         r.resume_match,  # 0.0 - 1.0
+        discovered_iso,  # filter_updated_at — initial state == discovered
     ]
 
 

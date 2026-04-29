@@ -23,7 +23,7 @@ boards:
   - { slug: cal,          source_type: ashby,      board_id: cal,          enabled: false }  # 404 — try `cal-com`?
   - { slug: framer,       source_type: lever,      board_id: framer,       enabled: false }  # 404 — moved off Lever
   - { slug: webflow,      source_type: greenhouse, board_id: webflow,      enabled: true }
-  - { slug: zapier,       source_type: greenhouse, board_id: zapier,       enabled: false }  # 404 — Zapier on Workday now
+  - { slug: zapier,       source_type: ashby,      board_id: zapier,       enabled: true }   # ✓ moved to Ashby (23 postings, reprobe 2026-04-29)
   - { slug: github,       source_type: greenhouse, board_id: github,       enabled: false }  # 404 — Microsoft Careers (Workday) post-acquisition
   - { slug: discord,      source_type: greenhouse, board_id: discord,      enabled: true }
 
@@ -58,6 +58,12 @@ boards:
   - { slug: nvidia,       source_type: workday,    board_id: "nvidia:wd5:NVIDIAExternalCareerSite", enabled: true }   # ✓ Bangalore + Hyderabad (2000 postings)
   - { slug: walmart,      source_type: workday,    board_id: "walmart:wd5:WalmartExternal",         enabled: true }   # ✓ Walmart Global Tech Bangalore (2000 postings)
   - { slug: autodesk,     source_type: workday,    board_id: "autodesk:wd1:Ext",                    enabled: true }   # ✓ Bangalore (689 postings)
+  # India-MNC Workday tenants (added 2026-04-29 via discover_workday.py)
+  - { slug: hpe,          source_type: workday,    board_id: "hpe:wd5:Jobsathpe",                   enabled: true }   # ✓ HPE Bangalore (300 postings)
+  - { slug: citi,         source_type: workday,    board_id: "citi:wd5:2",                          enabled: true }   # ✓ Citi Bangalore tech (300 postings)
+  - { slug: philips,      source_type: workday,    board_id: "philips:wd3:jobs-and-careers",        enabled: true }   # ✓ Philips India (300 postings)
+  - { slug: thomsonreuters, source_type: workday,  board_id: "thomsonreuters:wd5:External_Career_Site", enabled: true } # ✓ Thomson Reuters Bangalore dev center (300 postings)
+  - { slug: baxter,       source_type: workday,    board_id: "baxter:wd1:baxter",                   enabled: true }   # ✓ Baxter India (299 postings — mostly biomedical, role filter will trim heavily)
 
   # ── More AI-native companies (added 2026-04-26) ──
   - { slug: huggingface,  source_type: greenhouse, board_id: huggingface,  enabled: false }  # 404 — try `huggingface` on Lever?
@@ -67,7 +73,7 @@ boards:
   - { slug: perplexity,   source_type: ashby,      board_id: perplexity,   enabled: true }   # ✓ 72 postings
   - { slug: replit,       source_type: ashby,      board_id: replit,       enabled: true }   # ✓ moved to Ashby (84 postings)
   - { slug: modal,        source_type: ashby,      board_id: modal,        enabled: true }   # ✓ 28 postings
-  - { slug: togetherai,   source_type: lever,      board_id: togetherai,   enabled: false }  # 404
+  - { slug: togetherai,   source_type: greenhouse, board_id: togetherai,   enabled: true }   # ✓ moved to Greenhouse (49 postings, reprobe 2026-04-29)
   - { slug: sentry,       source_type: ashby,      board_id: sentry,       enabled: true }   # ✓ moved to Ashby (41 postings)
   - { slug: harvey,       source_type: ashby,      board_id: harvey,       enabled: true }   # ✓ 241 postings
   - { slug: browserbase,  source_type: ashby,      board_id: browserbase,  enabled: true }   # ✓ 9 postings
@@ -79,16 +85,16 @@ boards:
   - { slug: plaid,        source_type: lever,      board_id: plaid,        enabled: true }   # ✓ moved to Lever (92 postings)
   - { slug: datadog,      source_type: greenhouse, board_id: datadog,      enabled: true }   # ✓ 430 postings
   - { slug: twilio,       source_type: greenhouse, board_id: twilio,       enabled: true }   # ✓ 143 postings
-  - { slug: snowflake,    source_type: greenhouse, board_id: snowflake,    enabled: false }  # 404
+  - { slug: snowflake,    source_type: ashby,      board_id: snowflake,    enabled: true }   # ✓ moved to Ashby (423 postings, reprobe 2026-04-29)
   - { slug: databricks,   source_type: greenhouse, board_id: databricks,   enabled: true }   # ✓ 830 postings
-  - { slug: confluent,    source_type: greenhouse, board_id: confluent,    enabled: false }  # 404
+  - { slug: confluent,    source_type: ashby,      board_id: confluent,    enabled: true }   # ✓ moved to Ashby (54 postings, reprobe 2026-04-29)
   - { slug: hashicorp,    source_type: greenhouse, board_id: hashicorp,    enabled: false }  # 404
   - { slug: scaleai,      source_type: greenhouse, board_id: scaleai,      enabled: true }   # ✓ 172 postings
 
   # ── Free aggregators (added 2026-04-26) ──
   - { slug: remoteok,     source_type: remoteok,   board_id: ALL,          enabled: true }
   - { slug: remotive,     source_type: remotive,   board_id: ALL,          enabled: true }
-  - { slug: arbeitnow,    source_type: arbeitnow,  board_id: ALL,          enabled: true }
+  - { slug: arbeitnow,    source_type: arbeitnow,  board_id: ALL,          enabled: false }  # disabled 2026-04-29: 175 non-India / 0 India per geography audit (DE-only board)
   - { slug: hasjob,       source_type: hasjob,     board_id: ALL,          enabled: true }   # India-focused (Atom feed, ~16-50 postings)
 
   # ── Aggregators (different scraper class — see §7.2) ──
@@ -106,6 +112,85 @@ boards:
   - { slug: li_india_remote_ai,    source_type: linkedin, board_id: "kw=ai engineer;loc=India;tpr=r604800;wt=2;exp=4,5",             enabled: true }
   - { slug: li_india_founding_eng, source_type: linkedin, board_id: "kw=founding engineer;loc=India;tpr=r604800;exp=4,5",            enabled: true }
 
-  # ── Deferred to v2 (uncomment when paid proxy in place) ──
-  # - { slug: wellfound,  source_type: wellfound,  board_id: ALL,          enabled: false }
-  # - { slug: linkedin,   source_type: linkedin,   board_id: ALL,          enabled: false }
+  # ── LinkedIn (authenticated) — uses your `li_at` session cookie ──
+  # Added 2026-04-29 per India-pivot. Higher rate-limit budget unlocks deeper
+  # India coverage (companies that post on LinkedIn but don't use a public ATS).
+  # Kept DISABLED by default until LI_AT_COOKIE is set. Setup:
+  #   1. Log in to linkedin.com in your browser.
+  #   2. Devtools → Application → Cookies → linkedin.com → copy `li_at` value.
+  #   3. Add to launchd plist env or ~/.zshrc:  export LI_AT_COOKIE='AQEDA...'
+  #   4. Flip enabled: true below and run scripts/verify_boards.py to confirm.
+  # board_id supports `pages=N` for pagination (default 1, max 5).
+  # Refresh the cookie every ~365 days.
+  # Controlled first-rollout (2026-04-29): 4 boards enabled with details=false
+  # to keep the first daily run conservative on the auth rate budget. Verified
+  # smoke test returned 10 India-located postings (Google/Razorpay/Uber/Walmart
+  # Global Tech India/Roku) from a single 2-page query. Flip the rest to true
+  # once the auth budget proves stable across a few runs.
+  - { slug: li_auth_blr_senior_backend, source_type: linkedin_auth, board_id: "kw=senior backend engineer;loc=Bengaluru;tpr=r604800;exp=4,5;pages=2;details=false",      enabled: true }
+  - { slug: li_auth_blr_staff_swe,      source_type: linkedin_auth, board_id: "kw=staff software engineer;loc=Bengaluru;tpr=r604800;exp=4,5;pages=2;details=false",     enabled: true }
+  - { slug: li_auth_india_remote_senior,source_type: linkedin_auth, board_id: "kw=senior software engineer;loc=India;tpr=r604800;wt=2;exp=4,5;pages=2;details=false",   enabled: true }
+  - { slug: li_auth_india_founding_eng, source_type: linkedin_auth, board_id: "kw=founding engineer;loc=India;tpr=r604800;exp=4,5;pages=2;details=false",                enabled: true }
+  - { slug: li_auth_blr_full_stack,     source_type: linkedin_auth, board_id: "kw=senior full stack engineer;loc=Bengaluru;tpr=r604800;exp=4,5;pages=2;details=false",  enabled: true }
+  - { slug: li_auth_blr_eng_manager,    source_type: linkedin_auth, board_id: "kw=engineering manager;loc=Bengaluru;tpr=r604800;exp=5,6;pages=2;details=false",          enabled: true }
+  - { slug: li_auth_india_hybrid_senior,source_type: linkedin_auth, board_id: "kw=senior software engineer;loc=India;tpr=r604800;wt=3;exp=4,5;pages=2;details=false",   enabled: true }
+  - { slug: li_auth_india_ml_engineer,  source_type: linkedin_auth, board_id: "kw=machine learning engineer;loc=India;tpr=r604800;exp=4,5;pages=2;details=false",        enabled: true }
+
+  # ── Naukri.com — India-primary public job board (added 2026-04-29) ──
+  # Public JSON API at /jobapi/v3/search; no auth required. Naukri is the
+  # single largest source of Indian engineering listings (~60% of India
+  # postings live here exclusively per docs/sources-roadmap.md).
+  # board_id format: kw=...;loc=...;exp=min-max;pages=N
+  # exp is years (e.g. "4-9"). pages defaults to 2 (= 40 results), max 5.
+  # Sort defaults to freshness; add `sort=r` for relevance.
+  # WORKING via okhttp UA bypass (verified 2026-04-29). No auth needed.
+  # See src/scout/sources/naukri.py docstring for the empirical findings.
+  - { slug: naukri_blr_senior_backend, source_type: naukri, board_id: "kw=senior backend engineer;loc=bengaluru;exp=4-9;pages=2",    enabled: true }
+  - { slug: naukri_blr_staff_swe,      source_type: naukri, board_id: "kw=staff software engineer;loc=bengaluru;exp=5-12;pages=2",   enabled: true }
+  - { slug: naukri_blr_full_stack,     source_type: naukri, board_id: "kw=senior full stack engineer;loc=bengaluru;exp=4-9;pages=2", enabled: true }
+  - { slug: naukri_blr_eng_manager,    source_type: naukri, board_id: "kw=engineering manager;loc=bengaluru;exp=6-15;pages=2",       enabled: true }
+  - { slug: naukri_blr_principal_eng,  source_type: naukri, board_id: "kw=principal engineer;loc=bengaluru;exp=8-15;pages=2",        enabled: true }
+  - { slug: naukri_india_remote_senior,source_type: naukri, board_id: "kw=senior software engineer;loc=remote;exp=4-9;pages=2",      enabled: true }
+  - { slug: naukri_india_ml_engineer,  source_type: naukri, board_id: "kw=machine learning engineer;loc=india;exp=4-9;pages=2",      enabled: true }
+  - { slug: naukri_blr_founding_eng,   source_type: naukri, board_id: "kw=founding engineer;loc=bengaluru;exp=3-8;pages=2",          enabled: true }
+  # Stack-specific Naukri queries (added 2026-04-29 — diversity expansion)
+  - { slug: naukri_blr_java,           source_type: naukri, board_id: "kw=senior java backend engineer;loc=bengaluru;exp=4-9;pages=2",  enabled: true }
+  - { slug: naukri_blr_python,         source_type: naukri, board_id: "kw=senior python engineer;loc=bengaluru;exp=4-9;pages=2",        enabled: true }
+  - { slug: naukri_blr_golang,         source_type: naukri, board_id: "kw=golang engineer;loc=bengaluru;exp=4-9;pages=2",                enabled: true }
+  - { slug: naukri_blr_react,          source_type: naukri, board_id: "kw=senior react engineer;loc=bengaluru;exp=4-9;pages=2",         enabled: true }
+  - { slug: naukri_blr_nodejs,         source_type: naukri, board_id: "kw=senior node js engineer;loc=bengaluru;exp=4-9;pages=2",       enabled: true }
+  - { slug: naukri_india_genai,        source_type: naukri, board_id: "kw=generative ai engineer;loc=india;exp=3-9;pages=2",            enabled: true }
+
+  # ── Instahyre — premium India tech aggregator ──
+  # Public REST endpoint /api/v1/job_search/ via okhttp UA bypass (Cloudflare BM
+  # whitelists the mobile UA on this path; browser UAs hit a JS challenge).
+  # See src/scout/sources/instahyre.py docstring for the empirical findings.
+  #
+  # Recon 2026-04-29: unauth feed returns the global pool (~13.6k jobs) sorted
+  # newest-first. Filter params (q/loc/exp) are silently ignored without auth —
+  # 1 broad feed-board is the right shape until/unless cookie auth unlocks
+  # server-side filtering. Filter-targeted boards below are kept disabled and
+  # ready to flip on if a smoke-test confirms auth honors filters.
+  - { slug: instahyre_feed,            source_type: instahyre, board_id: "pages=5",                                                     enabled: true  }
+  - { slug: instahyre_blr_senior_backend, source_type: instahyre, board_id: "q=senior backend engineer;loc=bengaluru;exp=4-9;pages=3",  enabled: false }
+  - { slug: instahyre_blr_staff_swe,   source_type: instahyre, board_id: "q=staff software engineer;loc=bengaluru;exp=5-12;pages=3",    enabled: false }
+  - { slug: instahyre_blr_full_stack,  source_type: instahyre, board_id: "q=senior full stack engineer;loc=bengaluru;exp=4-9;pages=3",  enabled: false }
+  - { slug: instahyre_blr_eng_manager, source_type: instahyre, board_id: "q=engineering manager;loc=bengaluru;exp=6-15;pages=3",        enabled: false }
+  - { slug: instahyre_india_remote,    source_type: instahyre, board_id: "q=senior software engineer;loc=remote;exp=4-9;pages=3",       enabled: false }
+  - { slug: instahyre_india_ai,        source_type: instahyre, board_id: "q=ai engineer;loc=india;exp=3-9;pages=3",                     enabled: false }
+  - { slug: instahyre_india_founding,  source_type: instahyre, board_id: "q=founding engineer;loc=india;exp=3-9;pages=3",               enabled: false }
+
+  # ── Hirist.tech — premium India tech (auth required) ──
+  # gladiator.hirist.tech LoopBack API behind JWT cookies; no okhttp UA bypass.
+  # Returns the user's personalized feed (server-side ranked to profile);
+  # filter params (kw/loc/exp) are silently ignored — only `pages=N` matters.
+  # Requires HIRIST_COOKIES env var. JWT expires ~30 days; refresh by re-login.
+  # See src/scout/sources/hirist.py docstring for setup.
+  - { slug: hirist_feed,               source_type: hirist,    board_id: "pages=3",                                                     enabled: true  }
+
+  # ── Deferred to v2 (uncomment when paid proxy / cookie auth in place) ──
+  # - { slug: wellfound,    source_type: wellfound,  board_id: ALL,  enabled: false }  # Cloudflare-protected, requires login + paid proxy
+  # - { slug: cutshort,     source_type: cutshort,   board_id: ALL,  enabled: false }  # requires session cookie auth — same pattern as instahyre
+  # - { slug: indeed_in,    source_type: indeed,     board_id: ALL,  enabled: false }  # aggressive anti-scraping, paid residential proxy required
+  # - { slug: eightfold,    source_type: eightfold,  board_id: ALL,  enabled: false }  # ATS-class source like workday — needs source rewrite per tenant
+  # - { slug: dayforce,     source_type: dayforce,   board_id: ALL,  enabled: false }  # ATS-class (Ceridian); few India targets — defer until needed

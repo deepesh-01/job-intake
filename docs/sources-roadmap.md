@@ -1,12 +1,75 @@
 # Source Roadmap — Why the Funnel Skews Tech-Brand-Heavy & How to Fix It
 
-*Owner: Deepesh · Status: proposal · Last updated: 2026-04-27*
+*Owner: Deepesh · Status: revised after party-mode review · Last updated: 2026-04-29*
 
 > Sibling docs:
 > - [`vision.md`](./vision.md) — product vision
 > - [`decisions.md`](./decisions.md) — ADR log
 > - [`how-to-journey.md`](./how-to-journey.md) — operational guide
 > - [`tasks.md`](./tasks.md) — chronological build log
+
+---
+
+## 0 · 2026-04-29 Update — India-pivot + party-mode review
+
+**Goal sharpened:** the user's actual ask is *remote or hybrid roles in India*, not "broaden the funnel." This inverts most of the original Tier 0 priorities — adding 30 more US-Workday tenants amplifies the existing skew rather than fixing it.
+
+**Party-mode review (Winston/Amelia/Mary/John, 2026-04-29) verdict on the original Tier 0 plan:** NOT ready to ship as written. Specific structural failures:
+
+1. **LinkedIn 5→20 math is broken.** With `details=true`, 20 queries × ~26 reqs = 520 requests against a ~50-req-before-429 budget. Existing 5-query setup already operates in degraded mode (~30 actual yield from a 125 theoretical = ~24% efficiency). Fix: shard across days OR `details=false` on most.
+2. **The "30 Workday tenants" list is half-fiction.** Microsoft, Google, Citrix are NOT on Workday. ~6 of the proposed 30 are real Workday tenants. Discovery probe is required before yaml additions.
+3. **`verify_boards.py` weekly auto-disable is a footgun.** A single transient 5xx silently kills working boards. Need N≥3-consecutive-failure quorum before flipping `enabled: false`.
+4. **The 250-job LinkedIn projection is unmeasured arithmetic.** Dedup rate accelerates non-linearly; realistic ceiling 80–120 unique. Mary: "the roadmap is a confidence trick built on un-tested multipliers."
+5. **The 15 unicorns list filters on existence, not hiring intent.** BYJUs/Unacademy/Vedantu have been net-shedding since 2024. "Adds rows, not applicable rows" (Mary).
+6. **No precision metric.** Roadmap optimizes supply, ignores throughput. JTBD is 15-min morning swipe-triage; tripling the queue with flat tagging breaks the product (John).
+7. **Survivorship bias in source inventory.** The 21 disabled India boards likely *moved ATS*, not died. Probing migrations is higher-leverage than adding 45 new tenants (Mary).
+
+**LinkedIn-auth verification (2026-04-29):** Smoke test with real `LI_AT_COOKIE` confirmed **40 India-located postings** from 4 boards (10 each, pages=2, details=false). Sample companies surfaced: Google, Razorpay, Flipkart, Walmart Global Tech India, Roku, Uber, Airbnb — exactly the India MNC + Indian-founded mix the unauth path misses. Initial fix required: `linkedin_auth.py` was hitting `/jobs/search/` (auth SPA shell, no inline cards); patched to use the `jobs-guest` endpoint **with** the cookie attached, which keeps the existing parser and unlocks both higher rate-limit and pagination beyond `start=25`. 4 of 8 li_auth boards enabled in YAML; remaining 4 stay disabled until the auth budget proves stable across 2-3 daily runs.
+
+**Shipped 2026-04-29 (this session):**
+
+- `src/scout/sources/linkedin_auth.py` — LinkedIn auth'd source (cookie-based; `LI_AT_COOKIE` env var). Higher rate-limit budget unlocks deeper India coverage. Boards added (disabled, opt-in).
+- `src/scout/sources/naukri.py` — Naukri.com source. **WORKING (verified 2026-04-29):** breakthrough was empirical — Naukri's `/jobapi/v3/search` is gated by Akamai BMP for browser User-Agents, but the same endpoint **returns HTTP 200 with full JSON when called with `User-Agent: okhttp/4.12.0`** (Naukri's Android app pattern). No auth, no cookies, no `_abck`, no `nkparam`, no TLS impersonation, no headless browser. Single-line UA change unlocked the gate. Verified across 17 different `appid/systemid` combinations — all returned 200. Full smoke test: 8 boards × 1 page = 160 postings parsed correctly with structured comp (`salaryDetail` → INR ranges), location, skills, ms-since-epoch posting timestamps. **All 8 `naukri_*` boards in `boards.yaml` flipped to `enabled: true`.** Failure mode if Naukri tightens: bump `_OKHTTP_UA` in source to current Android app version (30-second fix). Full research artifact at `_bmad-output/planning-artifacts/research/technical-naukri-akamai-bypass-research-2026-04-29.md`. Documented fallback paths if okhttp UA path closes: NopeRi-style `nkparam` RSA generator (12 lines, [Traverser25/NopeRi](https://github.com/Traverser25/NopeRi)) or sitemap-driven AmbitionBox/iimjobs crawl.
+- `src/scout/sources/hirist.py` — Hirist.tech source (premium India IT). **WORKING (verified 2026-04-29) — auth required.** Hirist (rebranded from hirist.com → hirist.tech) is fully auth-walled; the Naukri-style okhttp UA bypass does NOT work. Architecture: Next.js 8.1.0 frontend, LoopBack API at `gladiator.hirist.tech` (publicly readable OpenAPI spec at `/explorer/openapi.json`). Working endpoint `GET /job/jobfeed` returns the user's personalized feed (server-side ranked to profile skills/experience), 50 jobs/page, paginates via `?page=N`. Filter params (kw/loc/exp) are silently ignored — only `pages` matters. Fields: id, title, introText (HTML JD body), min/max years, minSal/maxSal in lakhs INR with hideSal flag (~10% of postings show comp), createdTimeMs (100% coverage), tags (skills array), locations, companyData.companyName, workFromHome flag. Public job URL: `https://www.hirist.tech/j/<id>`. Auth: paste full Cookie header value (`HIRIST_CK1` + `hirist_seeker_enc` JWTs + `PHPSESSID`) into `HIRIST_COOKIES` env var; JWT expires ~30 days. **First scout-run yield: 106 of 150 fetched rows landed in queue (44 dropped by exclude/dedup); 103/106 tagged `resume_strong` (97% strong-match rate), 104/106 `target_city`, 98/106 `remote_ok`, 61/106 `seniority_match`, only 1/106 `wrong_discipline`** — vastly cleaner signal than Instahyre's 45% strong-match / 14% wrong-discipline. Comp visibility 10% (visible ones land at ₹60-80 LPA, well above the ₹40L floor). Failure mode: 401/403 → cookies expired, refresh by re-logging-in. `instahyre_feed` board enabled at `pages=3` (150 jobs/run).
+- `src/scout/sources/instahyre.py` — Instahyre source. **WORKING (verified 2026-04-29) without auth.** Same pattern as Naukri: the public REST endpoint `/api/v1/job_search/` is **not** behind Cloudflare's Bot Manager challenge that gates the HTML pages — it returns clean JSON for `User-Agent: okhttp/4.12.0` with no cookies. Recon confirmed: `total_count = 13627`, sorted-descending by id (= freshness), 35 objects/page, `meta.next` cursor, all filter params (`q=`/`locations=`/`experience_min/max=`) silently ignored on the unauth endpoint (filtering happens at the runner via exclude + resume_match, same model as `hn_hiring`/`yc_waas`). Cookie auth is **optional** — the source reads `INSTAHYRE_COOKIE` and sends it as `sessionid` if set, but the unauth global feed is sufficient on its own. **`instahyre_feed` board enabled (5 pages = 175 fresh jobs/run); 7 keyword-targeted boards stay disabled until cookie auth confirms server-side filter support.** First scout-run yield: 131 of 175 fetched rows landed in the queue (44 dropped by exclude/dedup/JD-quality filters), real Indian tech employers (HighLevel, Kickdrum, Rakuten, MobiKwik, Tesco, GreyOrange, Goldcast, Equiti). Field availability is intentionally narrow — the API returns `id`/`title`/`company_name`/`locations`/`keywords[]`/`public_url` only, **no comp / no posted_at / no JD body** (in either list or detail endpoint). Title + keywords drive tags; `instahyre` added to the JD-length-skip exemption set in `runner._enrich_one`. Known caveat: synthesized JD body is short (title+keywords+company-tagline) → resume_match degenerates to ~1.00 for most rows; per-company intra-batch top-7 cap keeps this from compounding. Failure mode if Instahyre tightens: same ladder as Naukri (bump UA → curl_cffi → Playwright). Added to `INDIA_FOCUSED_SOURCES` in `src/scout/location.py` (location filter bypassed).
+- `scripts/discover_workday.py` — given a careers URL, follows redirects to find the Workday `tenant:sub:site` triple and verifies via the existing source. Replaces the 404-lottery workflow.
+- `scripts/reprobe_disabled.py` — for each disabled board in `boards.yaml`, probes alternate ATSes (greenhouse/lever/ashby) at the same slug. Run weekly to catch ATS migrations. **First run found 4 of 21 disabled boards have moved**, applied to YAML in this session:
+  - `zapier`: greenhouse → **ashby** (23 postings)
+  - `togetherai`: lever → **greenhouse** (49 postings)
+  - `snowflake`: greenhouse → **ashby** (423 postings)
+  - `confluent`: greenhouse → **ashby** (54 postings)
+  - **Total free yield: +549 postings/run**, zero new infrastructure. Validates Mary's survivorship-bias finding.
+- `scripts/verify_boards.py` — hardened with `--skip` flag (cron-safe `--skip linkedin`) and `--json` output. Auto-disable consumers MUST implement N≥3 quorum (documented in module docstring).
+- **Per-company intra-batch cap**: `src/scout/runner.py::_dedup_intra_batch` now caps to top-K (default 7) by `resume_match` score per company per run. Prevents single-employer flood (Databricks/Nvidia were 200-400 rows each at last count).
+
+**Not shipped, deliberately:**
+
+- LinkedIn unauth `5→20` queries — degraded performance under existing config; deferred until sharded-cron approach lands.
+- 30-Workday-tenant fan-out — uses `discover_workday.py` first; only confirmed tenants get added.
+- 15-unicorns blind add — needs hiring-activity probe (≥1 senior eng posting in last 30d) before each add.
+- Sheet-aware per-company replacement (where a higher-score new posting evicts the lowest-score existing in `status=new`) — requires new `SheetClient` methods, separate change.
+- `yc_waas.py` rewrite — full source rewrite per Amelia, not endpoint patch. Separate ticket.
+
+**Acceptance metric (Mary):** *unique senior-IC India-located postings per run, after dedup, where the company is not already in the top-5 concentration*. Measure baseline NOW (before enabling auth'd sources), then weekly post-enable. If the number doesn't move, the change failed regardless of yaml entry count.
+
+**Source status — full answer to "what about X?":**
+
+| Source | Status | Path |
+|---|---|---|
+| **Naukri** | ✅ **WORKING** (2026-04-29) — bypassed via `User-Agent: okhttp/4.12.0`. 160 postings on smoke test, all 8 boards live. No auth required. | Operational. Bump UA if Naukri ever tightens. |
+| **LinkedIn (auth)** | Built (cookie-required) — disabled in YAML pending `LI_AT_COOKIE` setup | Set env var → flip `enabled: true` |
+| **Instahyre** | ✅ **WORKING** (2026-04-29) — bypassed via `User-Agent: okhttp/4.12.0` against `/api/v1/job_search/`. Cookie not required (handoff doc was wrong about that — `INSTAHYRE_COOKIE` is optional, sent as `sessionid` if set). 131 rows landed in queue on first run, all India-located. `instahyre_feed` board (5 pages = 175 jobs) live; 7 keyword-targeted boards disabled until auth proves to unlock filtering. | Operational. Bump UA if Instahyre tightens; add cookie if filters needed. |
+| **Hirist.tech** | ✅ **WORKING** (2026-04-29) — auth required (`HIRIST_COOKIES` env var, JWT cookies expire ~30 days). gladiator.hirist.tech LoopBack API; openapi spec is publicly readable at `/explorer/openapi.json`. Returns *personalized* feed (server-side ranked to profile). **Highest-quality source in the funnel: 97% resume_strong rate, 1% wrong_discipline** vs Instahyre's 45% / 14%. 150 jobs/run at `pages=3`. | Operational. Refresh cookies when JWT expires. |
+| **Cutshort** | Same likely pattern as Naukri/Instahyre (mobile-app UA bypass on JSON API). ~1-2 hr to probe. India tech-only. |
+| **Wellfound (AngelList)** | Cloudflare-protected; login + paid residential proxy required. Tier 2 — defer. |
+| **Indeed (India)** | Aggressive anti-scraping (the most hostile of any major board). Paid residential proxy required. Tier 2 — defer. |
+| **Eightfold.ai** | Eightfold is an *ATS provider* (like Workday/Greenhouse), not a job board. Companies like Capgemini, Infosys, Tata Communications use it. Build pattern: per-tenant probe similar to `workday.py`. ~2-4 hr if a high-value Indian tenant uses it. |
+| **Dayforce** | Ceridian's HCM/ATS. Few India targets. Defer until a specific tenant comes up. |
+| **Vettery** | **Defunct** — acquired by Hired (now hired.com) in 2020, brand discontinued. Skip permanently. |
+
+**"payjamahr" / "payjamhar":** I couldn't identify this name as a real platform — possibly a typo for Hirect, Pamten, or PeoplePerHour? Please clarify.
+
+**For the original analysis (which still stands as background) see §1 onward below.**
 
 ---
 

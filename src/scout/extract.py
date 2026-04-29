@@ -158,6 +158,18 @@ _INR_SINGLE_RE = re.compile(
     rf"(?:up\s*to\s+)?(?:₹|Rs\.?|INR)?\s*({_NUM_RE})\s*(?P<unit>lpa|lakhs?|cr|crores?|l)\b\+?",
     re.IGNORECASE,
 )
+# Raw-rupee range with INR prefix and NO unit suffix.
+# Naukri's salaryDetail produces strings like "INR 750,000-1,500,000" — bare
+# rupee values, never lakhs/crores. Without this fallback the unit-suffix
+# regex fails, currency is detected as INR but low/high stay None, and tag.py
+# routes to `comp_unknown` instead of evaluating against `inr_floor`.
+# Sanity floor: numbers must be >=1L (100,000) to avoid matching IDs, year
+# ranges, addresses, etc. that happen to sit next to "INR".
+_INR_RAW_RANGE_RE = re.compile(
+    rf"(?:₹|Rs\.?|\bINR\b)\s*({_NUM_RE})\s*(?:-|–|—|‒|−|to)\s*(?:₹|Rs\.?|\bINR\b)?\s*({_NUM_RE})"
+    rf"(?!\s*(?:lpa|lakhs?|cr|crores?|l)\b)",
+    re.IGNORECASE,
+)
 
 # USD/other-currency patterns: numbers expressed with k/K or commas.
 _FOREIGN_RANGE_RE = re.compile(
@@ -252,6 +264,17 @@ def parse_comp(
                 else:
                     low, high = v, v
                 matched_text = m.group(0)
+            else:
+                # Naukri raw-rupee fallback: "INR 750,000-1,500,000".
+                m = _INR_RAW_RANGE_RE.search(body)
+                if m:
+                    raw_low = _to_int(m.group(1))
+                    raw_high = _to_int(m.group(2))
+                    # Sanity: at least one anchor must be >= 1L to avoid IDs / years.
+                    if raw_low >= 100_000 or raw_high >= 100_000:
+                        low = int(raw_low)
+                        high = int(raw_high)
+                        matched_text = m.group(0)
     else:
         m = _FOREIGN_RANGE_RE.search(body)
         if m:

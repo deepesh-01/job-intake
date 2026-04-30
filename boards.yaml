@@ -171,7 +171,7 @@ boards:
   # 1 broad feed-board is the right shape until/unless cookie auth unlocks
   # server-side filtering. Filter-targeted boards below are kept disabled and
   # ready to flip on if a smoke-test confirms auth honors filters.
-  - { slug: instahyre_feed,            source_type: instahyre, board_id: "pages=5",                                                     enabled: true  }
+  - { slug: instahyre_feed,            source_type: instahyre, board_id: "pages=3",                                                     enabled: true  }
   - { slug: instahyre_blr_senior_backend, source_type: instahyre, board_id: "q=senior backend engineer;loc=bengaluru;exp=4-9;pages=3",  enabled: false }
   - { slug: instahyre_blr_staff_swe,   source_type: instahyre, board_id: "q=staff software engineer;loc=bengaluru;exp=5-12;pages=3",    enabled: false }
   - { slug: instahyre_blr_full_stack,  source_type: instahyre, board_id: "q=senior full stack engineer;loc=bengaluru;exp=4-9;pages=3",  enabled: false }

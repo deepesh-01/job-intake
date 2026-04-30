@@ -23,6 +23,7 @@ export function JobsList({
       q: filters.q || undefined,
       discovered_within: filters.discoveredWithin || undefined,
       sort: filters.sort,
+      has_comp: filters.hasComp || undefined,
       limit: 200,
     }
   }, [filters])

@@ -101,6 +101,7 @@ export async function fetchJobs(params: {
   q?: string
   discovered_within?: string
   sort?: string
+  has_comp?: boolean
   limit?: number
   offset?: number
 }): Promise<JobsListResponse> {
@@ -111,6 +112,7 @@ export async function fetchJobs(params: {
   if (params.q) sp.set("q", params.q)
   if (params.discovered_within) sp.set("discovered_within", params.discovered_within)
   if (params.sort) sp.set("sort", params.sort)
+  if (params.has_comp) sp.set("has_comp", "true")
   if (params.limit) sp.set("limit", String(params.limit))
   if (params.offset) sp.set("offset", String(params.offset))
   return jget<JobsListResponse>("/api/jobs?" + sp.toString())

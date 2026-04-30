@@ -14,6 +14,7 @@ export function App() {
                            // status filter alone drives what's visible.
     targetCity: false,
     excludeNonUsOnly: false,
+    hasComp: false,
     q: "",
     sort: "resume_match_desc",
     discoveredWithin: "",

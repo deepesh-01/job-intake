@@ -309,6 +309,12 @@ def list_jobs(
         "resume_match_desc",
         description="resume_match_desc | discovered_desc | discovered_asc | comp_high_desc | filter_updated_desc | filter_updated_asc",
     ),
+    has_comp: bool = Query(
+        False,
+        description="When true, only return rows where comp is known "
+        "(comp_string set OR comp_high set OR comp_inherited tag). "
+        "Drops the no-comp Instahyre/Hirist/Workday wall.",
+    ),
     limit: int = Query(200, ge=1, le=2000),
     offset: int = Query(0, ge=0),
 ) -> JobsListResponse:
@@ -329,6 +335,13 @@ def list_jobs(
         rows = [r for r in rows if unwanted.isdisjoint(set(r.get("tags", [])))]
     if q:
         rows = [r for r in rows if _matches(r, q)]
+    if has_comp:
+        rows = [
+            r for r in rows
+            if r.get("comp_string")
+            or r.get("comp_high")
+            or "comp_inherited" in (r.get("tags") or [])
+        ]
     if discovered_within:
         bucket = discovered_within.strip().lower()
         delta_map = {"24h": timedelta(hours=24), "7d": timedelta(days=7), "30d": timedelta(days=30)}

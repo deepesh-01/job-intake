@@ -184,6 +184,17 @@ def main() -> int:
     if intra_batch_dups:
         log.info("intra_batch_dedup", dropped=intra_batch_dups)
 
+    # ── Cross-source comp inheritance ──
+    # Sources like Instahyre / Hirist / Workday rarely return comp data
+    # (~95% comp_unknown). When the same (company, role) pair appears in
+    # Naukri / LinkedIn-auth / a comp-disclosing source, inherit that
+    # comp signal — gives the queue useful comp coverage without making
+    # any new API calls. Tagged `comp_inherited` so the UI distinguishes
+    # it from comp parsed directly out of THIS posting's JD.
+    inherited = _inherit_comp_within_run(enriched_rows, log=log)
+    if inherited:
+        log.info("comp_inherited", rows_filled=inherited)
+
     # ── Write to Sheet ──
     rows_for_sheet = [_to_sheet_row(r) for r in enriched_rows]
     inserted = sheet.append_jobs(rows_for_sheet)
@@ -367,6 +378,86 @@ def _is_app_eng(role: str) -> bool:
 
 def _safe_id(s: str) -> str:
     return s.replace(":", "_").replace("/", "_")
+
+
+def _inherit_comp_within_run(rows: list[EnrichedRow], *, log: Any) -> int:
+    """For rows without comp data, copy comp from a same-(company, role)
+    row in the SAME RUN that does have comp. Cheap signal-amplifier:
+    Naukri / LinkedIn-auth surface comp on a meaningful slice of postings;
+    Instahyre / Hirist / Workday almost never do. When the same role
+    appears in both, the no-comp side gets a usable comp range.
+
+    Match key: (normalize_company, normalize_role) — same key shape used
+    by the intra-batch dedup, so if anything could match it does.
+    Tagged `comp_inherited` and prefixes comp_string with `~` so the UI
+    can render it distinct from JD-parsed comp.
+
+    Returns count of rows that received an inherited comp.
+    """
+    # Donor index: rows that DO have comp data (any of currency / low / high
+    # set, or an explicit comp_string from the source). Prefer rows with
+    # numeric comp; if multiple donors per key, the first wins
+    # (deterministic, since sources iterate in boards.yaml order).
+    donors: dict[tuple[str, str], EnrichedRow] = {}
+    for r in rows:
+        has_numeric = (r.comp_currency or r.comp_high or r.comp_low)
+        has_string = r.posting.comp_string
+        if not (has_numeric or has_string):
+            continue
+        key = (
+            extract.normalize_company(r.posting.company),
+            extract.normalize_role(r.posting.role),
+        )
+        donors.setdefault(key, r)
+
+    if not donors:
+        return 0
+
+    inherited = 0
+    for r in rows:
+        if r.comp_currency or r.comp_high or r.comp_low or r.posting.comp_string:
+            continue  # already has comp
+        key = (
+            extract.normalize_company(r.posting.company),
+            extract.normalize_role(r.posting.role),
+        )
+        donor = donors.get(key)
+        if donor is None or donor is r:
+            continue
+        # Copy numeric comp + currency. Prefix the user-visible string with
+        # `~` to denote estimate. Keep existing fields if donor's were also
+        # blank (defensive — shouldn't happen given the donor filter above).
+        r.comp_currency = donor.comp_currency or r.comp_currency
+        r.comp_low = donor.comp_low or r.comp_low
+        r.comp_high = donor.comp_high or r.comp_high
+        r.comp_low_usd = donor.comp_low_usd or r.comp_low_usd
+        r.comp_high_usd = donor.comp_high_usd or r.comp_high_usd
+        if donor.posting.comp_string and not r.posting.comp_string:
+            r.posting.comp_string = f"~ {donor.posting.comp_string} (from {donor.posting.source_type})"
+        elif donor.comp_low or donor.comp_high:
+            cur = donor.comp_currency or "INR"
+            low = donor.comp_low
+            high = donor.comp_high
+            if low and high:
+                r.posting.comp_string = f"~ {cur} {low:,}-{high:,} (from {donor.posting.source_type})"
+            elif high:
+                r.posting.comp_string = f"~ {cur} up to {high:,} (from {donor.posting.source_type})"
+        if "comp_inherited" not in r.tags:
+            r.tags.append("comp_inherited")
+        # Drop comp_unknown if it was set — comp is now known (estimated).
+        if "comp_unknown" in r.tags:
+            r.tags.remove("comp_unknown")
+        inherited += 1
+        try:
+            log.debug(
+                "comp_inherit",
+                target=r.posting.id,
+                donor=donor.posting.id,
+                source=donor.posting.source_type,
+            )
+        except Exception:  # noqa: BLE001 — best-effort
+            pass
+    return inherited
 
 
 def _dedup_intra_batch(rows: list[EnrichedRow]) -> tuple[list[EnrichedRow], int]:

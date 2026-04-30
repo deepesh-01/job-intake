@@ -10,6 +10,7 @@ export interface Filters {
   resumeStrong: boolean
   targetCity: boolean
   excludeNonUsOnly: boolean
+  hasComp: boolean
   q: string
   sort: string
   discoveredWithin: string  // "" | "24h" | "7d" | "30d" | "older"
@@ -215,6 +216,11 @@ export function FilterBar({
                     active={value.excludeNonUsOnly}
                     onClick={() => onChange({ ...value, excludeNonUsOnly: !value.excludeNonUsOnly })}
                     label="Hide US-only"
+                  />
+                  <ToggleChip
+                    active={value.hasComp}
+                    onClick={() => onChange({ ...value, hasComp: !value.hasComp })}
+                    label="Has comp ✓"
                   />
                 </div>
                 <div className="flex items-center gap-1.5 overflow-x-auto -mx-1 px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">

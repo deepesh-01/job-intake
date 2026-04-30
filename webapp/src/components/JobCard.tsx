@@ -18,6 +18,7 @@ const TAG_PRIORITY = [
   "resume_strong",
   "target_city",
   "comp_ok",
+  "comp_inherited",   // surface the inherited comp signal early
   "ai_native",
   "enjoy_eligible",
   "early_stage",
@@ -51,6 +52,7 @@ const TAG_DISPLAY: Record<string, { label: string; tone: "good" | "neutral" | "w
   non_us_only:          { label: "US-only",         tone: "bad" },
   comp_below:           { label: "Below floor",     tone: "warn" },
   comp_unknown:         { label: "No comp",         tone: "neutral" },
+  comp_inherited:       { label: "Comp ~ inherited", tone: "good" },
 }
 
 const TONE_CLASS: Record<string, string> = {

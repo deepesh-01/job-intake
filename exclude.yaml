@@ -484,14 +484,29 @@ excluded_role_patterns:
   - "(?i)\\bqa\\s+(engineer|automation)\\b"
   - "(?i)\\bsdet\\b"                     # Software Development Engineer in Test
 
+  # ── Round 6 (2026-04-30 — morning audit caught 9 leaks the Round 4+5 patterns missed) ──
+  # Categories: regulatory/compliance, sourcing/procurement, biz-consulting,
+  # IAM admin (SailPoint), customer service, supply-chain head.
+  - "(?i)\\bregulatory affairs\\b"
+  - "(?i)\\bcompliance\\s+(?:officer|analyst|manager|specialist|associate|director)\\b"
+  - "(?i)\\bcontracts\\s+(?:administration|administrator|manager|specialist)\\b"
+  - "(?i)\\bstrategic sourcing\\b"
+  - "(?i)\\b(?:scm|supply\\s+chain)\\s+(?:head|lead|director|manager)\\b"
+  - "(?i)\\bcustomer service\\s+(?:specialist|representative|associate|executive)\\b"
+  - "(?i)\\bbusiness consultant\\b"
+  - "(?i)\\bsailpoint\\b"                 # IAM admin role — not software eng
+  - "(?i)\\bcorporate head\\b"             # too senior + non-eng
+  - "(?i)\\bself\\s*pay\\b"                # healthcare billing role
+
   # ── Round 5 (2026-04-29 — Hirist audit: body-shop + junior cleanup) ──
   # Hirist surfaces ~27% staffing-firm postings that hide the end-employer
   # ("Pan Asia HR Solutions", "Nexis HR Consulting", etc.). User is senior IC
   # so junior-titled roles also need filtering (existing intern/trainee/fresher
   # rules don't catch "Junior .Net Developer").
 
-  # Junior-titled tech roles
-  - "(?i)\\bjunior\\s+(?:\\.net|java|python|node|ruby|php|swift|android|ios|backend|frontend|full[- ]?stack|qa|sde|swe|developer|engineer|programmer|software|tech|dev)\\b"
+  # Junior-titled tech roles. Round 6 added qa-test/automation tester
+  # variants (caught EngiNeo "Junior Automation QA Tester" leak).
+  - "(?i)\\bjunior\\s+(?:\\.net|java|python|node|ruby|php|swift|android|ios|backend|frontend|full[- ]?stack|qa|automation|tester|sde|swe|developer|engineer|programmer|software|tech|dev)\\b"
 
   # Body-shop / staffing / HR-consultancy company-name patterns (high-confidence)
   # NOTE: these go in excluded_company_patterns, not role patterns. Listed here

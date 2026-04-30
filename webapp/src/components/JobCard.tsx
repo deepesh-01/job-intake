@@ -19,6 +19,7 @@ const TAG_PRIORITY = [
   "target_city",
   "comp_ok",
   "comp_inherited",   // surface the inherited comp signal early
+  "comp_estimated",   // AmbitionBox estimate — slightly lower priority than direct inheritance
   "ai_native",
   "enjoy_eligible",
   "early_stage",
@@ -53,6 +54,7 @@ const TAG_DISPLAY: Record<string, { label: string; tone: "good" | "neutral" | "w
   comp_below:           { label: "Below floor",     tone: "warn" },
   comp_unknown:         { label: "No comp",         tone: "neutral" },
   comp_inherited:       { label: "Comp ~ inherited", tone: "good" },
+  comp_estimated:       { label: "Comp ~ ABox",     tone: "neutral" },
 }
 
 const TONE_CLASS: Record<string, string> = {

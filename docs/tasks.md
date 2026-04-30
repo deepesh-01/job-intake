@@ -1280,6 +1280,85 @@ breadcrumb, not source state. Ignored.
 - Profile retention/rotation — `data/apply_runs/<...>.log` files
   accumulate forever; add a 30-day cleanup cron.
 
+---
+
+# Step 31 — Comp signal amplifier (inheritance + AmbitionBox + has_comp filter) — ADR-028
+
+## 31.1 — Cross-source comp inheritance
+- `_inherit_comp_within_run` in `src/scout/runner.py`.
+- After fetch + intra-batch dedup, build donor index keyed by
+  `(normalize_company, normalize_role)` from rows with comp; backfill
+  rows without comp. Tagged `comp_inherited`. Same normalize keys as
+  the intra-batch dedup so anything matching dedup also matches here.
+- comp_string prefix `~ INR <range> (from <source>)` for provenance.
+
+## 31.2 — `src/scout/ambitionbox.py` (~280 lines)
+- Public API: `lookup(company, role) → CompEstimate | None`.
+- Slug derivation: lowercase + strip `Pvt Ltd / Private Limited / Inc /
+  LLC / Ltd` suffixes + non-alpha → hyphens.
+- Fetch `/salaries/<slug>-salaries` → parse `__NEXT_DATA__` →
+  `pageProps.filtersData.data.jobProfiles[]`. Each entry has
+  `jobProfileName`, `typicalMinCtc`, `typicalMaxCtc`, `avgCtc`.
+- Pick the best fuzzy-match by role title (naive Jaccard on tokens —
+  no rapidfuzz dep). Fall back to `popularDesignations[0]` then
+  `totalSalaryAverage` (company-overall avg, ±25%).
+- SQLite cache at `data/ambitionbox_cache.sqlite`, schema:
+  `(company_norm, role_norm)` PK; comp_low / comp_high / avg /
+  matched_role / matched_score / source_url / is_miss / cached_at.
+- TTL: 30d hits, 7d misses. Polite 1 req/sec throttle via existing
+  `scout.sources._http._throttle`.
+- 15/15 unit tests in `tests/test_ambitionbox.py`.
+
+## 31.3 — `_enrich_with_ambitionbox` in scout/runner.py
+- Runs after `_inherit_comp_within_run` so already-inherited rows aren't
+  double-enriched. Only touches rows with no comp at all.
+- comp_string prefix `~ INR <range> (AmbitionBox: ~<matched-role>)`
+  for transparency.
+- Tagged `comp_estimated`. Removes `comp_unknown` if previously set.
+- Silent on AmbitionBox failures — scout never blocks on enrichment.
+
+## 31.4 — `has_comp` API filter + webapp pill
+- `/api/jobs?has_comp=true` returns only rows where
+  `comp_string OR comp_high OR comp_inherited tag OR comp_estimated tag`.
+- `webapp/src/components/FilterBar.tsx` — new "Has comp ✓" toggle pill
+  in advanced filters. Defaults OFF (opt-in for signal density).
+- `Filters.hasComp` boolean threaded through `JobsList` + `CardStack`
+  + `App.tsx` default state.
+- `JobCard.tsx` `TAG_DISPLAY` gains `comp_estimated: { label: "Comp ~
+  ABox", tone: "neutral" }` (distinct from green `comp_inherited`).
+- `TAG_PRIORITY` bumps `comp_inherited` and `comp_estimated` to surface
+  early on the card.
+
+## 31.5 — `boards.yaml` instahyre `pages=5 → pages=3`
+- Halves Instahyre volume per cron from 175 → 105 fetched. Net effect
+  on queue: ~80 → ~50 Instahyre rows daily. Less no-comp noise even
+  before inheritance + enrichment fire.
+
+## 31.6 — Validation
+- 15/15 unit tests pass (`test_ambitionbox.py`); 129/129 full suite.
+- Live HTTP smoke against 5 known cos (Razorpay/Tesco/WaferWire/Moonfrog/
+  Dell): all return reasonable estimates, role-match score 67-100 on
+  exact-title hits.
+- Real-queue smoke against 25 no-comp companies: 17 hits / 8 misses
+  (68% hit rate). High-confidence subset (score ≥ 60): 9 / 25 (36%).
+- AmbitionBox auth-vs-unauth comparison (with `INSTAHYRE_COOKIE` set):
+  identical response, 0/35 vs 0/35 comp-visible — confirms `hideSal`
+  is employer-side and auth doesn't unlock comp. So the AmbitionBox
+  enrichment is the right place to invest, not deeper Instahyre auth
+  integration.
+
+## 31.7 — Follow-ups (deferred)
+- Cross-day comp inheritance — load prior sheet rows into a
+  `(co, role) → comp` map and inherit on day-2+ even when no
+  same-day donor exists. Adds a sheet read; benefit unclear vs the
+  AmbitionBox pass.
+- Better slug aliasing for AmbitionBox — when the canonical slug 404s,
+  try a search-API or Google `site:ambitionbox.com` fallback.
+- Weight role-matches by `minExperience..maxExperience` overlap with
+  the user's target seniority (currently only token-match).
+- Cache cleanup cron for `data/ambitionbox_cache.sqlite` if it ever
+  grows unbounded (unlikely given TTL refresh).
+
 ## 29.6 — Cookie env vars (now four sources need creds)
 - `LI_AT_COOKIE` (LinkedIn auth, ~365-day expiry)
 - `NAUKRI_COOKIE` (Naukri optional, sent as Bearer for personalized results)

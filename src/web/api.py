@@ -341,6 +341,7 @@ def list_jobs(
             if r.get("comp_string")
             or r.get("comp_high")
             or "comp_inherited" in (r.get("tags") or [])
+            or "comp_estimated" in (r.get("tags") or [])
         ]
     if discovered_within:
         bucket = discovered_within.strip().lower()

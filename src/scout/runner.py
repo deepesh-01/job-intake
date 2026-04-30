@@ -20,7 +20,7 @@ from typing import Any
 from lib.config import load_env, load_yaml
 from lib.logging import configure
 from lib.posting import EnrichedRow, Posting, SourceError
-from scout import archive, dedup, exclude, extract, location as loc_filter, resume, tag
+from scout import ambitionbox, archive, dedup, exclude, extract, location as loc_filter, resume, tag
 from scout.extract import Comp
 from sheet import schema
 from sheet.client import SheetClient, now_iso, today_iso
@@ -194,6 +194,15 @@ def main() -> int:
     inherited = _inherit_comp_within_run(enriched_rows, log=log)
     if inherited:
         log.info("comp_inherited", rows_filled=inherited)
+
+    # ── AmbitionBox enrichment for rows still without comp ──
+    # Crowdsourced India-comp data — typical-range estimates per company,
+    # role-matched via popularDesignations. Tag `comp_estimated` to
+    # distinguish from `comp_inherited` (lower confidence — averages over
+    # company+role pairings, not the specific posting).
+    estimated = _enrich_with_ambitionbox(enriched_rows, env.data_dir, log=log)
+    if estimated:
+        log.info("comp_ambitionbox", rows_filled=estimated)
 
     # ── Write to Sheet ──
     rows_for_sheet = [_to_sheet_row(r) for r in enriched_rows]
@@ -378,6 +387,57 @@ def _is_app_eng(role: str) -> bool:
 
 def _safe_id(s: str) -> str:
     return s.replace(":", "_").replace("/", "_")
+
+
+def _enrich_with_ambitionbox(rows: list[EnrichedRow], data_dir: Path, *, log: Any) -> int:
+    """For rows still without comp after the within-run inheritance pass,
+    look the company + role up on AmbitionBox. Tagged `comp_estimated` +
+    comp_string prefixed with `~` and "(AmbitionBox)" so the UI can render
+    it distinct from JD-parsed and inherited comp.
+
+    Caches per (company_norm, role_norm) under `data/ambitionbox_cache.sqlite`
+    with a 30-day hit TTL and 7-day miss TTL. Cross-run runs hit the cache;
+    a fresh scout typically does ~20-50 unique-company fetches in 1-2 min
+    (1 req/sec polite throttle).
+
+    Failures are silent — AmbitionBox unreachable doesn't break the scout.
+    """
+    enriched_count = 0
+    for r in rows:
+        # Skip rows that already have comp — from this posting OR inherited.
+        if r.comp_currency or r.comp_high or r.comp_low or r.posting.comp_string:
+            continue
+        try:
+            est = ambitionbox.lookup(
+                r.posting.company,
+                role=r.posting.role,
+                data_dir=data_dir,
+            )
+        except Exception as e:  # noqa: BLE001 — AmbitionBox is best-effort
+            log.debug("ambitionbox_error", company=r.posting.company, err=str(e))
+            continue
+        if est is None:
+            continue
+
+        r.comp_currency = "INR"
+        r.comp_low = est.comp_low
+        r.comp_high = est.comp_high
+        # Don't fill USD-converted comp here — the conversion is fx-rate-
+        # dependent and we'd be adding precision the source doesn't justify.
+        # The webapp only renders USD when low/high_usd are set; INR is
+        # always shown when low/high are set.
+        match_note = (
+            f"~{est.matched_role}" if est.matched_role else "~company avg"
+        )
+        r.posting.comp_string = (
+            f"~ INR {est.comp_low:,}-{est.comp_high:,} (AmbitionBox: {match_note})"
+        )
+        if "comp_estimated" not in r.tags:
+            r.tags.append("comp_estimated")
+        if "comp_unknown" in r.tags:
+            r.tags.remove("comp_unknown")
+        enriched_count += 1
+    return enriched_count
 
 
 def _inherit_comp_within_run(rows: list[EnrichedRow], *, log: Any) -> int:

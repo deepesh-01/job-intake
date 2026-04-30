@@ -850,3 +850,111 @@ Future hardening (logged in tasks.md as Step 30 follow-ups):
   user's queue (6 rows currently)
 - Render-loop in cli-edit.js (System A) so re-tailor page constraints
   are enforced at render time, not by repeated user-side iteration
+
+---
+
+## ADR-028 · AmbitionBox comp enrichment + cross-source inheritance + has_comp UI filter
+**Date:** 2026-04-30 · **Status:** Accepted (live, 68% hit rate on real queue)
+
+**Context.** Most India sources (Instahyre / Hirist / Workday) return
+~95% `comp_unknown` — comp blackout is structural, not a filter bug
+(verified empirically: tested with `INSTAHYRE_COOKIE` set; auth doesn't
+unlock comp on `/api/v1/job_search/` — `hideSal` is employer-side
+config, identical response unauth vs auth). User frustration: "alot
+with incomplete info" — hard to triage rows blind on comp.
+
+**Decision.** Three-pronged comp signal amplifier:
+
+1. **Cross-source comp inheritance** (within a single scout run).
+   `_inherit_comp_within_run` in `src/scout/runner.py` — after all
+   sources fetch + intra-batch dedup runs, build a donor index keyed
+   on `(normalize_company, normalize_role)` from rows that DO have
+   comp data, then back-fill rows without comp by looking up the index.
+   Tagged `comp_inherited`; comp_string prefixed with `~` and
+   `(from <source_type>)` for provenance. Same key shape as the
+   intra-batch dedup, so anything that COULD match WILL match.
+
+2. **AmbitionBox per-company enrichment** (cross-run cached).
+   `src/scout/ambitionbox.py` exposes `lookup(company, role)` →
+   `CompEstimate | None`. Fetches `https://www.ambitionbox.com/salaries/<slug>-salaries`,
+   parses Next.js `__NEXT_DATA__` for `pageProps.filtersData.data.jobProfiles`
+   (per-role typical-CTC ranges), picks the best fuzzy-match by
+   role title, falls back to company-overall `totalSalaryAverage`
+   when no role match. Tagged `comp_estimated` with the matched role
+   in the comp_string for transparency:
+   `"~ INR 3,021,988-3,340,093 (AmbitionBox: ~Senior Software Engineer)"`.
+
+   Cache: SQLite at `data/ambitionbox_cache.sqlite`. Schema keyed by
+   `(company_norm, role_norm)`. TTL 30d for hits, 7d for negative-cache
+   misses (so unknown companies don't get re-fetched every run).
+   Polite throttling via the existing `_throttle()` helper (1 req/sec
+   per host) — full scout run with ~30 unique uncached companies adds
+   ~1-2 minutes total wall time.
+
+3. **`has_comp` UI filter** (`webapp/src/components/FilterBar.tsx`).
+   New "Has comp ✓" toggle pill in advanced filters. Defaults OFF.
+   When ON: API filters to rows where `comp_string OR comp_high OR
+   comp_inherited tag OR comp_estimated tag` is set. Drops the
+   no-comp wall instantly when the user wants signal density.
+
+   Plus `boards.yaml` lowered `instahyre_feed` `pages=5 → pages=3`
+   (175 → 105 jobs/run; the no-comp Instahyre cluster shrinks ~40%
+   even before the inheritance + enrichment passes).
+
+**Reasoning.**
+- Inheritance captures the strongest signal possible: a sibling
+  posting for the same exact role at the same company in another
+  source IS that posting's comp. ~1-3% of rows match within a single
+  scout run; that's enough to be worth it (free comp coverage).
+- AmbitionBox is the largest crowd-sourced India-comp dataset (45M+
+  data points across 880k+ companies). Its per-role typical ranges
+  are the right precision for a "what does X at Y typically pay"
+  estimate. Validated 68% hit rate on real queue companies (Walmart,
+  Databricks, Uber, PhonePe = exact-match score 100; small startups
+  + non-Indian cos = expected misses).
+- Tag distinction (`comp_inherited` green vs `comp_estimated`
+  neutral) lets the user calibrate trust. JD-parsed comp (no tag)
+  is most trusted; sibling-inherited is high; AmbitionBox is medium.
+- `has_comp` filter is opt-in not default-on so the user keeps full
+  visibility into the queue (some rows are worth applying to even
+  without comp signal — e.g. an interesting product co at a known-
+  premium company tier).
+
+**Trade-offs accepted.**
+- AmbitionBox slug derivation is heuristic. Slugs like `moonfrog →
+  moonfrog-labs` fail; alias resolution is deferred. Negative-cache
+  TTL of 7 days means a company that gets indexed later eventually
+  refreshes. For a manual override path: edit
+  `data/ambitionbox_cache.sqlite` directly — the cache is just
+  SQLite.
+- Fuzzy role-match score is naive Jaccard on tokens (no rapidfuzz
+  dep added — wasn't worth it for 2-6-word strings). Works well for
+  exact / near-exact matches; degrades on synonyms ("Backend Engineer"
+  vs "Server-Side Engineer") which AmbitionBox almost never has anyway.
+- AmbitionBox's `popularDesignations` ordering can put the most-
+  populated role first regardless of seniority — small-co matches
+  sometimes pick a fresher role for a senior posting. Tag's score
+  field (0-100) signals this; UI surfaces it via `(score=N)` in the
+  comp_string. Future improvement: weight matches by
+  `minExperience..maxExperience` overlap with the user's target.
+- Cross-day comp inheritance (loading prior sheet rows and inheriting
+  from them) deferred. Within-run is the cheap win; cross-day adds a
+  sheet read of unknown size. Listed in tasks.md as Step 30 follow-up.
+- `has_comp` filter does NOT count `comp_below` as "comp known"
+  semantically — the row HAS comp but it's below your floor, so
+  showing it is correct. Tag is a separate signal.
+
+**Consequence.** Comp-signal coverage on a fresh queue jumps from
+~5-10% (JD-parsed only) to ~50-70% (JD + inherited + AmbitionBox).
+Validated post-build:
+- 15/15 unit tests pass (`tests/test_ambitionbox.py`).
+- Real-queue smoke (25 companies): 17 hits / 8 misses = 68%.
+- High-confidence subset (score ≥60): 9/25 = 36% — these are
+  near-exact role matches that the user can rely on.
+The remaining 30-50% (small startups, non-Indian cos, role
+mismatches at score=0) stay `comp_unknown` — honest about
+limitations, no false-positive comp injected.
+
+Cross-repo: zero changes to System A — this is a System B-only
+enhancement. Cache is local-only state; survives across runs and
+machines via the file at `data/ambitionbox_cache.sqlite`.

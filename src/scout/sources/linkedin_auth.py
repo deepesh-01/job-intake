@@ -132,7 +132,14 @@ def _polite_get(
                 "Accept-Language": "en-US,en;q=0.9",
             },
             timeout=timeout,
-            follow_redirects=True,
+            # IMPORTANT: do NOT follow redirects. When LI_AT_COOKIE is
+            # invalidated mid-run, LinkedIn 302s seeMoreJobPostings to
+            # `/login` which then 302s back, creating a redirect loop
+            # that burned 25+ minutes of scout wall-time on 2026-04-30
+            # before manual kill. Treat 30x as "session degraded → bail
+            # immediately" so the runner marks the board errored + moves
+            # on to the next source.
+            follow_redirects=False,
         )
     except httpx.HTTPError as e:
         raise SourceError(SOURCE_TYPE, "?", f"http error: {e}") from e
@@ -142,6 +149,16 @@ def _polite_get(
         raise SourceError(
             SOURCE_TYPE, "?",
             f"HTTP {r.status_code}: cookie likely expired — refresh LI_AT_COOKIE",
+        )
+    # 30x = session expired (LinkedIn redirects to /login). Refresh hint
+    # for the user; failing fast prevents the redirect-loop burn.
+    if r.status_code in (301, 302, 303, 307, 308):
+        loc = r.headers.get("location", "")[:80]
+        raise SourceError(
+            SOURCE_TYPE, "?",
+            f"HTTP {r.status_code} → {loc!r}: LinkedIn redirected (session likely expired). "
+            "Refresh LI_AT_COOKIE — log in to linkedin.com fresh, copy the new li_at "
+            "value from devtools cookies, update .env.",
         )
     if r.status_code != 200:
         raise SourceError(
